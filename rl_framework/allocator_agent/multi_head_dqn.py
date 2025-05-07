@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-import numpy as np
 import torch.nn.functional as F
+
 
 class MultiHeadDQN(nn.Module):
     def __init__(self, state_dim, num_actions_per_head, num_heads, hidden_dim=128):
@@ -14,14 +14,17 @@ class MultiHeadDQN(nn.Module):
         self.shared_fc2 = nn.Linear(hidden_dim, hidden_dim)
 
         # Head-specific layers
-        self.heads = nn.ModuleList([
-            nn.Sequential(
-                nn.Linear(hidden_dim, hidden_dim),
-                nn.ReLU(),
-                nn.Linear(hidden_dim, num_actions_per_head)
-            ) for _ in range(num_heads)
-        ])
-    
+        self.heads = nn.ModuleList(
+            [
+                nn.Sequential(
+                    nn.Linear(hidden_dim, hidden_dim),
+                    nn.ReLU(),
+                    nn.Linear(hidden_dim, num_actions_per_head),
+                )
+                for _ in range(num_heads)
+            ]
+        )
+
     def forward(self, state):
         # Pass through shared layers
         x = F.relu(self.shared_fc1(state))

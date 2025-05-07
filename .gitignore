@@ -176,3 +176,6 @@ cython_debug/
 # Data files
 *.pickle
 *.pkl
+
+# VS Code
+.vscode/
