@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
-import numpy as np
-from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard.writer import SummaryWriter
+import torch
 
 from rl_framework.allocator_agent.allocator_agent import AllocatorAgent
 from rl_framework.allocator_agent.escooter_allocator_env import EscooterAllocatorEnv
@@ -21,6 +21,7 @@ def main():
 
     ALLOCATOR_AGENT_REPLAY_BUFFER_CAPACITY = 10000
     ALLOCATOR_AGENT_BATCH_SIZE = 32
+    ALLOCATOR_AGENT_HIDDEN_DIM = 128
 
     ALLOCATOR_AGENT_LR = 0.001
     ALLOCATOR_AGENT_GAMMA = 0.99
@@ -57,11 +58,31 @@ def main():
         epsilon_end=ALLOCATOR_AGENT_EPSILON_END,
         epsilon_decay=ALLOCATOR_AGENT_EPSILON_DECAY,
         batch_size=ALLOCATOR_AGENT_BATCH_SIZE,
+        hidden_dim=ALLOCATOR_AGENT_HIDDEN_DIM,
     )
 
     # Initialize TensorBoard writer
     writer = SummaryWriter(
         f"runs/allocator_agent_experiment_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    )
+
+    writer.add_hparams(
+        {
+            "num_communities": NUM_COMMUNITIES,
+            "num_episodes": NUM_EPISODES,
+            "max_steps_per_episode": MAX_STEPS_PER_EPISODE,
+            "allocator_step_duration": ALLOCATOR_AGENT_STEP_DURATION,
+            "allocator_epsilon_start": ALLOCATOR_AGENT_EPSILON_START,
+            "allocator_epsilon_end": ALLOCATOR_AGENT_EPSILON_END,
+            "allocator_epsilon_decay": ALLOCATOR_AGENT_EPSILON_DECAY,
+            "allocator_learning_rate": ALLOCATOR_AGENT_LR,
+            "allocator_gamma": ALLOCATOR_AGENT_GAMMA,
+            "allocator_batch_size": ALLOCATOR_AGENT_BATCH_SIZE,
+            "allocator_replay_buffer_capacity": ALLOCATOR_AGENT_REPLAY_BUFFER_CAPACITY,
+            "allocator_action_values": ALLOCATOR_AGENT_ACTION_VALUES,
+            "allocator_features_per_community": ALLOCATOR_AGENT_FEATURES_PER_COMMUNITY,
+        },
+        {},
     )
 
     for episode in range(NUM_EPISODES):
@@ -111,6 +132,10 @@ def main():
         if num_training_steps > 0:
             print(f"Average Loss: {episode_loss / num_training_steps:.4f}")
 
+    torch.save(
+        allocator_agent.policy_network.state_dict(),
+        f"allocator_agent_model_{datetime.now().strftime('%Y%m%d-%H%M%S')}.pth",
+    )
     allocator_env.close()
     writer.close()
     print("Training completed.")
