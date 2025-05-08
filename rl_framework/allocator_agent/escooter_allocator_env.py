@@ -5,6 +5,9 @@ from datetime import datetime, timedelta
 from typing import List
 import torch
 
+from rl_framework.demand_forecasting.demand_forecaster import DemandForecaster
+from rl_framework.demand_provider.demand_provider import DemandProvider
+
 
 class EscooterAllocatorEnv(gym.Env):
     def __init__(
@@ -32,8 +35,11 @@ class EscooterAllocatorEnv(gym.Env):
         self.reward_weight_rebalancing = reward_weight_rebalancing
         self.reward_weight_gini = reward_weight_gini
 
-        self.pickup_demand_forecaster = None  # Placeholder for demand forecaster
-        self.dropoff_demand_forecaster = None  # Placeholder for demand forecaster
+        self.pickup_demand_forecaster: DemandForecaster
+        self.dropoff_demand_forecaster: DemandForecaster
+
+        self.pickup_demand_provider: DemandProvider
+        self.dropoff_demand_provider: DemandProvider
 
         self.current_pickup_demand_forecast = np.zeros(num_communities)
         self.current_dropoff_demand_forecast = np.zeros(num_communities)
@@ -47,7 +53,7 @@ class EscooterAllocatorEnv(gym.Env):
         )
 
         self.max_steps = max_steps
-        self.step_count = 0
+        self.current_step = 0
 
         self.start_time = start_time
         self.step_duration = step_duration
@@ -65,11 +71,26 @@ class EscooterAllocatorEnv(gym.Env):
 
         return torch.tensor(observation, dtype=torch.float32)
 
-    def generate_demand_forecast(self):
-        # Placeholder for demand forecast generation logic
-        # map step count to time of day
-        self.current_pickup_demand_forecast = np.random.rand(self.num_communities)
-        self.current_dropoff_demand_forecast = np.random.rand(self.num_communities)
+    def calculate_current_time(self):
+        # Calculate the current time based on start_time, step_duration, and current_step
+        return self.start_time + self.step_duration * self.current_step
+
+    def generate_demand_forecast(self, current_time: datetime):
+        # Get the current time of day, day of week, and month based on start_time, tep_duration and current_step
+        time_of_day = current_time.hour
+        day_of_week = current_time.weekday()
+        month = current_time.month
+
+        self.current_pickup_demand_forecast = (
+            self.pickup_demand_forecaster.predict_demand_per_community(
+                time_of_day=time_of_day, day_of_week=day_of_week, month=month
+            )
+        )
+        self.current_dropoff_demand_forecast = (
+            self.pickup_demand_forecaster.predict_demand_per_community(
+                time_of_day=time_of_day, day_of_week=day_of_week, month=month
+            )
+        )
 
     def calculate_reward(
         self, total_satisfied_demand, rebalancing_cost, gini_coefficient
@@ -84,7 +105,7 @@ class EscooterAllocatorEnv(gym.Env):
         # based on self.current_vehicle_counts
         return 0.0  # Placeholder for Gini coefficient calculation
 
-    def step(self, action):
+    def step(self, action: List[int]):
         # --- map action to vehicle allocation ---
         actual_action_allocations = [self.action_values[a] for a in action]
 
@@ -97,7 +118,11 @@ class EscooterAllocatorEnv(gym.Env):
             temp_vehicle_counts[i] += allocation
 
             # --- verify vehicle counts are valid e.g. > 0 ---
-            temp_vehicle_counts[i] = max(temp_vehicle_counts[i], 0)
+            if temp_vehicle_counts[i] < 0:
+                # If the allocation results in negative vehicle counts, set it to zero
+                # and adjust the allocation accordingly for proper reward calculation
+                allocation = -temp_vehicle_counts[i]
+                temp_vehicle_counts[i] = 0
 
             total_vehicles_rebalanced += abs(allocation)
 
@@ -105,6 +130,27 @@ class EscooterAllocatorEnv(gym.Env):
 
         # --- simulate demand based on historical data ---
         total_satisfied_demand = 0
+        pickup_demand = self.pickup_demand_provider.get_demand_per_community(
+            time_of_day=self.start_time.hour,
+            day_of_week=self.start_time.weekday(),
+            month=self.start_time.month,
+        )
+        dropoff_demand = self.dropoff_demand_provider.get_demand_per_community(
+            time_of_day=self.start_time.hour,
+            day_of_week=self.start_time.weekday(),
+            month=self.start_time.month,
+        )
+
+        # Calculate total satisfied demand based on vehicle counts and demand
+        for i in range(self.num_communities):
+            # Satisfied demand is the minimum of available vehicles and demand
+            satisfied_demand = min(
+                self.current_vehicle_counts[i], -pickup_demand[i] + dropoff_demand[i]
+            )
+            total_satisfied_demand += satisfied_demand
+
+            # Update vehicle counts based on satisfied demand
+            self.current_vehicle_counts[i] -= satisfied_demand
 
         # --- calculate reward ---
         rebalancing_cost = total_vehicles_rebalanced * self.operator_rebalancing_cost
@@ -116,12 +162,13 @@ class EscooterAllocatorEnv(gym.Env):
         )
 
         # --- Prepare next state ---
-        self.step_count += 1
-        self.generate_demand_forecast()
+        self.current_step += 1
+        current_time = self.calculate_current_time()
+        self.generate_demand_forecast(current_time=current_time)
 
         next_observation = self.get_state_observation()
         terminated = False
-        truncated = self.step_count >= self.max_steps
+        truncated = self.current_step >= self.max_steps
 
         info = {}
 
@@ -130,9 +177,9 @@ class EscooterAllocatorEnv(gym.Env):
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed, options=options)
 
-        self.step_count = 0
+        self.current_step = 0
         self.current_vehicle_counts = np.zeros(self.num_communities)
-        self.generate_demand_forecast()
+        self.generate_demand_forecast(current_time=self.start_time)
 
         info = {}
 
@@ -140,7 +187,7 @@ class EscooterAllocatorEnv(gym.Env):
 
     def render(self):
         print("Rendering the environment state.")
-        print(f"Step: {self.step_count}")
+        print(f"Step: {self.current_step}")
 
     def close(self):
         print("Closing the environment.")

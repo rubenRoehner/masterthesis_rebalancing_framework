@@ -1,5 +1,5 @@
 from rl_framework.allocator_agent.multi_head_dqn import MultiHeadDQN
-from rl_framework.allocator_agent.replay_buffer import ReplayBuffer, Experience
+from rl_framework.allocator_agent.replay_buffer import ReplayBuffer
 import torch
 from typing import List
 
@@ -18,6 +18,7 @@ class AllocatorAgent:
         epsilon_decay=0.995,
         batch_size=64,
         target_update_freq=10,
+        hidden_dim=128,
     ):
         """
         AllocatorAgent constructor.
@@ -31,11 +32,13 @@ class AllocatorAgent:
             state_dim=state_dim,
             num_actions_per_head=self.num_actions_per_head,
             num_heads=num_communities,
+            hidden_dim=hidden_dim,
         )
         self.target_network = MultiHeadDQN(
             state_dim=state_dim,
             num_actions_per_head=self.num_actions_per_head,
             num_heads=num_communities,
+            hidden_dim=hidden_dim,
         )
         self.target_network.load_state_dict(self.policy_network.state_dict())
         self.target_network.eval()
@@ -57,9 +60,15 @@ class AllocatorAgent:
         )
 
     def select_action(self, state: torch.Tensor) -> List[int]:
+        """
+        Select an action based on the current state using epsilon-greedy policy
+        :param state: The current state of the environment (tensor)
+        :return: The selected action index for each community
+        """
         # epsilon-greedy action selection
 
-        state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
+        # state is already a tensor from the environment
+        state_tensor = state.unsqueeze(0)  # Add batch dimension
 
         if torch.rand(1).item() < self.epsilon:
             # Explore: select a random action
@@ -70,10 +79,14 @@ class AllocatorAgent:
             # Exploit: select the action with the highest Q-value
             with torch.no_grad():
                 self.policy_network.eval()
-                q_values = self.policy_network(state_tensor)
+                # policy_network returns a list of tensors
+                q_values_list = self.policy_network(state_tensor)
                 self.policy_network.train()
                 action_indices = torch.tensor(
-                    [torch.argmax(head, dim=1).item() for head in q_values]
+                    [
+                        torch.argmax(head_q_values, dim=1).item()
+                        for head_q_values in q_values_list
+                    ]
                 )
 
         return action_indices.tolist()
@@ -87,29 +100,100 @@ class AllocatorAgent:
         else:
             self.epsilon = self.epsilon_min
 
-    def store_experience(self, state: torch.Tensor, action_indices: List[int], reward: float, next_state: torch.Tensor, done: bool):
+    def store_experience(
+        self,
+        state: torch.Tensor,
+        action_indices: List[int],
+        reward: float,
+        next_state: torch.Tensor,
+        done: bool,
+    ):
         self.replay_buffer.push(state, action_indices, reward, next_state, done)
 
-    def train(self):  # Train the agent using the replay buffer
+    def train(self):
         if len(self.replay_buffer) < self.batch_size:  # not enough samples
             return None
 
         # Sample a batch of experiences from the replay buffer
         experiences = self.replay_buffer.sample(self.batch_size)
 
-        state_batch = torch.cat([exp.state for exp in experiences])
-        action_indice_batch = torch.tensor([exp.action_indicies for exp in experiences])
-        reward_batch = torch.tensor([exp.reward for exp in experiences])
-        next_state_batch = torch.cat([exp.next_state for exp in experiences])
-        done_batch = torch.tensor([exp.done for exp in experiences])
+        # exp.state is a 1D tensor [state_dim]. stack creates [batch_size, state_dim]
+        state_batch = torch.stack([exp.state for exp in experiences])
+        action_indice_batch = torch.tensor(
+            [exp.action_indicies for exp in experiences]
+        )  # [batch_size, num_communities]
+        reward_batch = torch.tensor(
+            [exp.reward for exp in experiences], dtype=torch.float32
+        )  # [batch_size]
 
+        # exp.next_state is a 1D tensor [state_dim]. stack creates [batch_size, state_dim]
+        next_state_batch = torch.stack([exp.next_state for exp in experiences])
+        done_batch = torch.tensor(
+            [exp.done for exp in experiences], dtype=torch.float32
+        )  # [batch_size]
 
         # Compute Q-values for the current states
-        q_values = self.policy_network(states)
+        # policy_network returns a list of tensors, one for each head e.g. for each communtiy.
+        # Each tensor in q_values_list is [batch_size, num_actions_per_head]
+        q_values_list = self.policy_network(state_batch)
+        current_q_values_selected_list = [
+            q_values_list[i].gather(1, action_indice_batch[:, i].unsqueeze(1))
+            for i in range(self.num_communities)
+        ]  # List of [batch_size, 1] tensors
 
+        with torch.no_grad():
+            # Compute Q-values for the next states using the target network
+            # target_network also returns a list of tensors
+            next_q_values_list = self.target_network(next_state_batch)
+            # For each head, get the max Q-value for the next state. Each element is [batch_size]
+            next_max_q_values_per_head_list = [
+                next_q_values_list[i].max(1)[0] for i in range(self.num_communities)
+            ]
+            # Stack them to get [batch_size, num_communities]
+            stacked_next_max_q_values = torch.stack(
+                next_max_q_values_per_head_list, dim=1
+            )
+
+            # Compute the target Q-values: R + gamma * max_a' Q_target(s', a')
+            # reward_batch is [batch_size], done_batch is [batch_size]
+            # stacked_next_max_q_values is [batch_size, num_communities]
+            # Broadcasting reward_batch and done_batch for element-wise multiplication
+            target_q_values = (
+                reward_batch.unsqueeze(1)  # [batch_size, 1]
+                + (1 - done_batch.unsqueeze(1))  # [batch_size, 1]
+                * self.gamma
+                * stacked_next_max_q_values  # [batch_size, num_communities]
+            )  # Result is [batch_size, num_communities]
+
+        # Compute the loss
+        # Initialize loss tensor on the same device as the network parameters
+        loss = torch.tensor(
+            0.0,
+            dtype=torch.float32,
+            device=next(self.policy_network.parameters()).device,
+        )
         for i in range(self.num_communities):
-            # 
+            # current_q_values_selected_list[i] is [batch_size, 1]
+            # target_q_values[:, i].unsqueeze(1) is [batch_size, 1]
+            loss += torch.nn.functional.mse_loss(
+                current_q_values_selected_list[i], target_q_values[:, i].unsqueeze(1)
+            )
+        loss /= torch.tensor(
+            self.num_communities, dtype=torch.float32, device=loss.device
+        )
 
-        final_loss = 0
+        # Backpropagation
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
 
-        return final_loss
+        self.train_step_counter += 1
+
+        # Update the target network
+        if self.train_step_counter % self.target_update_freq == 0:
+            self.update_target_network()
+
+        # Update epsilon
+        self.update_epsilon()
+
+        return loss.item()
