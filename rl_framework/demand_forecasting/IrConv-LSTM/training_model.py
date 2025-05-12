@@ -37,7 +37,7 @@ def train_model(size_of_kernel=1):  # Set default kernel size to 1 for hexagonal
     period_size = 7
     trend_size = 2
     # For hexagonal grid, explicitly set the number of grid cells to match your data
-    num_grid_cells = 233  # Matches the number of columns in your dataset
+    num_grid_cells = 236  # Matches the number of columns in your dataset
     torch.cuda.manual_seed(50)
     # Training data loading
     dset = escooter_1h_9h3_STG(

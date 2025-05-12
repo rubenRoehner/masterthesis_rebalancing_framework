@@ -24,7 +24,7 @@ class escooter_1h_9h3_STG(Dataset):
             return
 
         counts = np.load(
-            "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/IrConv-LSTM/data/demand.npy"
+            "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/IrConv-LSTM/data/demand_dropoff.npy"
         )
 
         self.zeros_grids = counts  # Removed [..., np.newaxis]
