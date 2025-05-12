@@ -47,9 +47,9 @@ if __name__ == "__main__":
     end_date = "102523"
     # Create test data set
     dtest = escooter_1h_9h3_STG(
-        hourly=hourly,
-        daily=daily,
-        weekly=weekly,
+        closeness=hourly,
+        period=daily,
+        trend=weekly,
         start_date=start_date,
         end_date=end_date,
     )

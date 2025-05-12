@@ -14,15 +14,13 @@ from pandas.plotting import register_matplotlib_converters
 register_matplotlib_converters()
 
 
-def train_model(size_of_kernel):
+def train_model(size_of_kernel=1):  # Set default kernel size to 1 for hexagonal grid
     """
-    This function is to train the IrConv+LSTM model, taking NEW York dataset as an example.
-    Please refer to the pre-print paper in Arxiv: https://arxiv.org/abs/2202.04376
+    This function is to train the IrConv+LSTM model, adapted for hexagonal grid data.
+
     :param
-    size_of_kernel: The size of irregular convolution kernel size;
-    start_date & end_date: The starting and ending date for training model;
-    valid_start_date & valid_end_date: The starting and ending date for validating model;
-    closeness_size & period_size & trend_size: Three historical periods for training model.
+    size_of_kernel: The size of irregular convolution kernel size, for hexagonal grid
+                   a small value like 1 is recommended
     """
 
     use_cuda = torch.cuda.is_available()
@@ -31,13 +29,15 @@ def train_model(size_of_kernel):
     # Parameters
     learning_rate = 0.00028
     batch_size = 50
-    max_epochs = 3
-    kernel_size = size_of_kernel
+    max_epochs = 50
+    kernel_size = size_of_kernel  # Use the passed kernel size parameter
     start_date = "022514"  # date format: MMDDHH
     end_date = "042023"  # date format: MMDDHH
     closeness_size = 24
     period_size = 7
     trend_size = 2
+    # For hexagonal grid, explicitly set the number of grid cells to match your data
+    num_grid_cells = 233  # Matches the number of columns in your dataset
     torch.cuda.manual_seed(50)
     # Training data loading
     dset = escooter_1h_9h3_STG(
@@ -82,9 +82,13 @@ def train_model(size_of_kernel):
         input_size_trend=trend_size,
         kernel_size=kernel_size,
         bsize=batch_size,
+        num_node=num_grid_cells,
     ).cuda()
     optimizer = optim.RMSprop(model.parameters(), lr=learning_rate, weight_decay=0.0)
-    scheduler_model = lr_scheduler.StepLR(optimizer, step_size=1, gamma=1)
+    # Adjust learning rate schedule for hexagonal grid data
+    scheduler_model = lr_scheduler.StepLR(
+        optimizer, step_size=1, gamma=size_of_kernel / 9
+    )
 
     # Loss function
     criterion = nn.MSELoss(size_average=True).cuda()
@@ -212,4 +216,6 @@ def train_model(size_of_kernel):
 
 
 if __name__ == "__main__":
-    train_model(size_of_kernel=9)
+    # Try a larger kernel size for hexagonal grid
+    # 7 represents a cell and its 6 direct neighbors in a hexagonal grid
+    train_model(size_of_kernel=7)

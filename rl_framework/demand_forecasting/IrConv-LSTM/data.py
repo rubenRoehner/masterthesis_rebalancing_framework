@@ -27,7 +27,7 @@ class escooter_1h_9h3_STG(Dataset):
             "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/IrConv-LSTM/data/demand.npy"
         )
 
-        self.zeros_grids = counts[..., np.newaxis]
+        self.zeros_grids = counts  # Removed [..., np.newaxis]
 
         index_to_date_dict, date_to_index_dict = date_to_index(
             "2025-02-11 14:00:00", "2025-04-28 09:00:00"
@@ -91,9 +91,9 @@ class escooter_1h_9h3_STG(Dataset):
         )
 
     def __getitem__(self, index):
-        x1 = self.chunks_closeness[index, :, :, :9]
-        x2 = self.chunks_period[index, :, :, :9]
-        x3 = self.chunks_trend[index, :, :, :9]
+        x1 = self.chunks_closeness[index, :, :, :]  # Changed :9 to :
+        x2 = self.chunks_period[index, :, :, :]  # Changed :9 to :
+        x3 = self.chunks_trend[index, :, :, :]  # Changed :9 to :
         y = self.chunks_target[index, -1:, :, :]
         return x1, x2, x3, y
 
