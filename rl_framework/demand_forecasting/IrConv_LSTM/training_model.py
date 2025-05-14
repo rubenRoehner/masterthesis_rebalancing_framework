@@ -46,6 +46,7 @@ def train_model(size_of_kernel=1):  # Set default kernel size to 1 for hexagonal
         trend=trend_size,
         start_date=start_date,
         end_date=end_date,
+        data_path="/home/ruroit00/rebalancing_framework/processed_data/bolt_dropoff_demand_h3_hourly.pickle",
     )
     train_loader = DataLoader(
         dset,
@@ -65,6 +66,7 @@ def train_model(size_of_kernel=1):  # Set default kernel size to 1 for hexagonal
         trend=trend_size,
         start_date=valid_start_date,
         end_date=valid_end_date,
+        data_path="/home/ruroit00/rebalancing_framework/processed_data/bolt_dropoff_demand_h3_hourly.pickle",
     )
     vaild_loader = DataLoader(
         dset_vaild,

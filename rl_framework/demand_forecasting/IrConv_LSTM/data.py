@@ -7,7 +7,13 @@ import pandas as pd
 
 class escooter_1h_9h3_STG(Dataset):
     def __init__(
-        self, closeness, period, trend, start_date="2012-01-01", end_date="2015-12-31"
+        self,
+        closeness,
+        period,
+        trend,
+        data_path: str,
+        start_date="2012-01-01",
+        end_date="2015-12-31",
     ):
 
         self.closeness = closeness
@@ -23,14 +29,13 @@ class escooter_1h_9h3_STG(Dataset):
             print("No end date was specified")
             return
 
-        counts = np.load(
-            "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/IrConv-LSTM/data/demand_dropoff.npy"
-        )
+        counts_df = pd.read_pickle(data_path)
+        counts_df.columns = sorted(counts_df.columns)
 
-        self.zeros_grids = counts  # Removed [..., np.newaxis]
+        self.zeros_grids = counts_df.values
 
         index_to_date_dict, date_to_index_dict = date_to_index(
-            "2025-02-11 14:00:00", "2025-04-28 09:00:00"
+            counts_df[0].index, counts_df[-1].index
         )
         self.zeros_grids_new = {}
         for index in range(len(date_to_index_dict)):
@@ -91,9 +96,9 @@ class escooter_1h_9h3_STG(Dataset):
         )
 
     def __getitem__(self, index):
-        x1 = self.chunks_closeness[index, :, :, :]  # Changed :9 to :
-        x2 = self.chunks_period[index, :, :, :]  # Changed :9 to :
-        x3 = self.chunks_trend[index, :, :, :]  # Changed :9 to :
+        x1 = self.chunks_closeness[index, :, :, :]
+        x2 = self.chunks_period[index, :, :, :]
+        x3 = self.chunks_trend[index, :, :, :]
         y = self.chunks_target[index, -1:, :, :]
         return x1, x2, x3, y
 
