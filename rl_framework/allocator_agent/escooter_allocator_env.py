@@ -113,6 +113,8 @@ class EscooterAllocatorEnv(gym.Env):
         return 0.0  # Placeholder for Gini coefficient calculation
 
     def step(self, action: List[int]):
+        current_time = self.calculate_current_time()
+
         # --- map action to vehicle allocation ---
         actual_action_allocations = [self.action_values[a] for a in action]
 
@@ -138,14 +140,14 @@ class EscooterAllocatorEnv(gym.Env):
         # --- simulate demand based on historical data ---
         total_satisfied_demand = 0
         pickup_demand = self.pickup_demand_provider.get_demand_per_community(
-            time_of_day=self.start_time.hour,
-            day=self.start_time.day,
-            month=self.start_time.month,
+            time_of_day=current_time.hour,
+            day=current_time.day,
+            month=current_time.month,
         )
         dropoff_demand = self.dropoff_demand_provider.get_demand_per_community(
-            time_of_day=self.start_time.hour,
-            day=self.start_time.day,
-            month=self.start_time.month,
+            time_of_day=current_time.hour,
+            day=current_time.day,
+            month=current_time.month,
         )
 
         # Calculate total satisfied demand based on vehicle counts and demand
@@ -170,7 +172,6 @@ class EscooterAllocatorEnv(gym.Env):
 
         # --- Prepare next state ---
         self.current_step += 1
-        current_time = self.calculate_current_time()
         self.generate_demand_forecast(current_time=current_time)
 
         next_observation = self.get_state_observation()
