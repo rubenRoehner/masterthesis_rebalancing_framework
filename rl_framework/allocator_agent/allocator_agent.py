@@ -2,6 +2,7 @@ from allocator_agent.multi_head_dqn import MultiHeadDQN
 from allocator_agent.replay_buffer import ReplayBuffer
 import torch
 from typing import List
+import torch.nn.functional as F
 
 
 class AllocatorAgent:
@@ -16,7 +17,7 @@ class AllocatorAgent:
         gamma=0.99,
         epsilon_start=1.0,
         epsilon_end=0.05,
-        epsilon_decay=0.995,
+        epsilon_decay=0.9995,
         batch_size=64,
         target_update_freq=10,
         hidden_dim=128,
@@ -173,25 +174,20 @@ class AllocatorAgent:
             )  # Result is [batch_size, num_communities]
 
         # Compute the loss
-        # Initialize loss tensor on the same device as the network parameters
-        loss = torch.tensor(
-            0.0,
-            dtype=torch.float32,
-            device=next(self.policy_network.parameters()).device,
-        )
-        for i in range(self.num_communities):
-            # current_q_values_selected_list[i] is [batch_size, 1]
-            # target_q_values[:, i].unsqueeze(1) is [batch_size, 1]
-            loss += torch.nn.functional.mse_loss(
-                current_q_values_selected_list[i], target_q_values[:, i].unsqueeze(1)
+        per_head_losses = [
+            F.mse_loss(
+                current_q_values_selected_list[i],
+                target_q_values[:, i].unsqueeze(1),
+                reduction="mean",
             )
-        loss /= torch.tensor(
-            self.num_communities, dtype=torch.float32, device=loss.device
-        )
+            for i in range(self.num_communities)
+        ]
+        loss = torch.stack(per_head_losses).to(self.device).mean()
 
         # Backpropagation
         self.optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.policy_network.parameters(), max_norm=10)
         self.optimizer.step()
 
         self.train_step_counter += 1

@@ -34,6 +34,7 @@ def main():
     ALLOCATOR_AGENT_BATCH_SIZE = 32
     ALLOCATOR_AGENT_HIDDEN_DIM = 128
 
+    ALLOCATOR_AGENT_TARGET_UPDATE_FREQ = 100
     ALLOCATOR_AGENT_LR = 0.001
     ALLOCATOR_AGENT_GAMMA = 0.99
 
@@ -42,6 +43,11 @@ def main():
     ALLOCATOR_AGENT_EPSILON_DECAY = 0.9995
 
     ALLOCATOR_AGENT_STEP_DURATION = 60  # in minutes
+
+    ALLOCATOR_AGENT_OPERATOR_REBALANCING_COST = 0.5
+    ALLOCATOR_AGENT_REWARD_WEIGHT_DEMAND = 1.0
+    ALLOCATOR_AGENT_REWARD_WEIGHT_REBALANCING = -0.1
+    ALLOCATOR_AGENT_REWARD_WEIGHT_GINI = -0.01
 
     DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
     PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
@@ -90,6 +96,10 @@ def main():
         max_steps=MAX_STEPS_PER_EPISODE,
         step_duration=timedelta(minutes=ALLOCATOR_AGENT_STEP_DURATION),
         start_time=START_TIME,
+        operator_rebalancing_cost=ALLOCATOR_AGENT_OPERATOR_REBALANCING_COST,
+        reward_weight_demand=ALLOCATOR_AGENT_REWARD_WEIGHT_DEMAND,
+        reward_weight_rebalancing=ALLOCATOR_AGENT_REWARD_WEIGHT_REBALANCING,
+        reward_weight_gini=ALLOCATOR_AGENT_REWARD_WEIGHT_GINI,
         dropoff_demand_forecaster=dropoff_demand_forecaster,
         pickup_demand_forecaster=pickup_demand_forecaster,
         dropoff_demand_provider=dropoff_demand_provider,
@@ -109,6 +119,7 @@ def main():
         epsilon_decay=ALLOCATOR_AGENT_EPSILON_DECAY,
         batch_size=ALLOCATOR_AGENT_BATCH_SIZE,
         hidden_dim=ALLOCATOR_AGENT_HIDDEN_DIM,
+        target_update_freq=ALLOCATOR_AGENT_TARGET_UPDATE_FREQ,
         device=device,
     )
 
