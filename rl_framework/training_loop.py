@@ -15,6 +15,7 @@ def main():
     # global parameters
     NUM_COMMUNITIES = 8
     NUM_ZONES = 273
+    FLEET_SIZE = 400
     NUM_EPISODES = 100
     MAX_STEPS_PER_EPISODE = 100
     START_TIME = datetime(2025, 2, 11, 14, 0)
@@ -35,19 +36,19 @@ def main():
     ALLOCATOR_AGENT_HIDDEN_DIM = 128
 
     ALLOCATOR_AGENT_TARGET_UPDATE_FREQ = 1000
-    ALLOCATOR_AGENT_LR = 0.0001
+    ALLOCATOR_AGENT_LR = 1e-5
     ALLOCATOR_AGENT_GAMMA = 0.99
 
     ALLOCATOR_AGENT_EPSILON_START = 1.0
     ALLOCATOR_AGENT_EPSILON_END = 0.01
-    ALLOCATOR_AGENT_EPSILON_DECAY = 0.995
+    ALLOCATOR_AGENT_EPSILON_DECAY = 0.999
 
     ALLOCATOR_AGENT_STEP_DURATION = 60  # in minutes
 
     ALLOCATOR_AGENT_OPERATOR_REBALANCING_COST = 0.5
     ALLOCATOR_AGENT_REWARD_WEIGHT_DEMAND = 1.0
-    ALLOCATOR_AGENT_REWARD_WEIGHT_REBALANCING = -0.1
-    ALLOCATOR_AGENT_REWARD_WEIGHT_GINI = -0.01
+    ALLOCATOR_AGENT_REWARD_WEIGHT_REBALANCING = 0
+    ALLOCATOR_AGENT_REWARD_WEIGHT_GINI = 0
 
     DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
     PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
@@ -105,6 +106,7 @@ def main():
         dropoff_demand_provider=dropoff_demand_provider,
         pickup_demand_provider=pickup_demand_provider,
         device=device,
+        fleet_size=FLEET_SIZE,
     )
 
     allocator_agent = AllocatorAgent(

@@ -16,6 +16,7 @@ class EscooterAllocatorEnv(gym.Env):
         features_per_community: int,
         action_values: List[int],
         max_steps: int,
+        fleet_size: int,
         pickup_demand_forecaster: DemandForecaster,
         dropoff_demand_forecaster: DemandForecaster,
         pickup_demand_provider: DemandProvider,
@@ -50,7 +51,9 @@ class EscooterAllocatorEnv(gym.Env):
 
         self.current_pickup_demand_forecast = np.zeros(num_communities)
         self.current_dropoff_demand_forecast = np.zeros(num_communities)
-        self.current_vehicle_counts = np.zeros(num_communities)
+
+        self.current_vehicle_counts = np.zeros(num_communities, dtype=int)
+        self.fleet_size = fleet_size
 
         self.action_values = action_values
         self.action_space = spaces.MultiDiscrete([len(action_values)] * num_communities)
@@ -100,10 +103,17 @@ class EscooterAllocatorEnv(gym.Env):
         )
 
     def calculate_reward(
-        self, total_satisfied_demand, rebalancing_cost, gini_coefficient
+        self,
+        total_satisfied_demand: int,
+        offered_demand: int,
+        rebalancing_cost,
+        gini_coefficient,
     ):
+        norm_satisified_demand = (
+            total_satisfied_demand / offered_demand if offered_demand > 0 else 1
+        )
         return (
-            self.reward_weight_demand * total_satisfied_demand
+            self.reward_weight_demand * norm_satisified_demand
             + self.reward_weight_rebalancing * rebalancing_cost
             + self.reward_weight_gini * gini_coefficient
         )
@@ -111,6 +121,66 @@ class EscooterAllocatorEnv(gym.Env):
     def calculate_gini_coefficient(self):
         # based on self.current_vehicle_counts
         return 0.0  # Placeholder for Gini coefficient calculation
+
+    def update_vehicle_counts(self, actions: np.ndarray) -> int:
+        neg_rebalancing_operations = -actions[
+            actions < 0
+        ]  # positive array of how many to pull
+        pos_rebalancing_operations = actions[
+            actions > 0
+        ]  # positive array of how many to add
+
+        sum_neg_rebalancing_operations = neg_rebalancing_operations.sum()
+        sum_pos_rebalancing_operations = pos_rebalancing_operations.sum()
+
+        rebalancing_vol = min(
+            sum_neg_rebalancing_operations, sum_pos_rebalancing_operations
+        )
+
+        # --- 2) proportionally scale & round to integers ---------
+        if rebalancing_vol > 0:
+            # scale rebalancing operations to the transfer volume
+            neg_scaled = neg_rebalancing_operations * (
+                rebalancing_vol / sum_neg_rebalancing_operations
+            )
+            pos_scaled = pos_rebalancing_operations * (
+                rebalancing_vol / sum_pos_rebalancing_operations
+            )
+
+            # floor each and keep track of remainders
+            neg_floor = np.floor(neg_scaled).astype(int)
+            pos_floor = np.floor(pos_scaled).astype(int)
+            rem_neg = int(rebalancing_vol - neg_floor.sum())
+            rem_pos = int(rebalancing_vol - pos_floor.sum())
+
+            # fractional parts to decide where to add the “leftover” vehicles
+            neg_frac = neg_scaled - neg_floor
+            pos_frac = pos_scaled - pos_floor
+
+            neg_indices = np.where(actions < 0)[0]
+            pos_indices = np.where(actions > 0)[0]
+
+            # sort by descending fractional part
+            neg_order = np.argsort(-neg_frac)
+            pos_order = np.argsort(-pos_frac)
+
+            # distribute the remainders to the highest fractions
+            for j in range(rem_neg):
+                neg_floor[neg_order[j]] += 1
+            for j in range(rem_pos):
+                pos_floor[pos_order[j]] += 1
+
+            # rebuild an array of actual integer allocations
+            actual_alloc = np.zeros_like(actions)
+            actual_alloc[neg_indices] = -neg_floor
+            actual_alloc[pos_indices] = pos_floor
+        else:
+            # nothing to move if either side is zero
+            actual_alloc = np.zeros_like(actions)
+
+        self.current_vehicle_counts += actual_alloc
+        total_vehicles_rebalanced = int(np.abs(actual_alloc).sum())
+        return total_vehicles_rebalanced
 
     def step(self, action: List[int]):
         current_time = self.calculate_current_time()
@@ -166,6 +236,7 @@ class EscooterAllocatorEnv(gym.Env):
 
         reward = self.calculate_reward(
             total_satisfied_demand=total_satisfied_demand,
+            offered_demand=sum(pickup_demand),
             rebalancing_cost=rebalancing_cost,
             gini_coefficient=self.calculate_gini_coefficient(),
         )
@@ -182,11 +253,22 @@ class EscooterAllocatorEnv(gym.Env):
 
         return next_observation, reward, terminated, truncated, info
 
+    def initialize_vehicle_counts(self):
+        # Initialize vehicle counts based on the fleet size and number of communities
+        self.current_vehicle_counts = np.full(
+            self.num_communities,
+            self.fleet_size // self.num_communities,
+            dtype=int,
+        )
+        remaining_vehicles = self.fleet_size % self.num_communities
+        for i in range(remaining_vehicles):
+            self.current_vehicle_counts[i] += 1
+
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed, options=options)
 
         self.current_step = 0
-        self.current_vehicle_counts = np.zeros(self.num_communities)
+        self.initialize_vehicle_counts()
         self.generate_demand_forecast(current_time=self.start_time)
 
         info = {}
