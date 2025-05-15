@@ -6,7 +6,7 @@ import torch
 
 class Experience(NamedTuple):
     state: torch.Tensor
-    action_indicies: List[int]
+    action_indices: List[int]
     reward: float
     next_state: torch.Tensor
     done: bool
@@ -20,12 +20,12 @@ class ReplayBuffer:
     def push(
         self,
         state: torch.Tensor,
-        action_indicies: List[int],
+        action_indices: List[int],
         reward: float,
         next_state: torch.Tensor,
         done: bool,
     ) -> None:
-        self.buffer.append(Experience(state, action_indicies, reward, next_state, done))
+        self.buffer.append(Experience(state, action_indices, reward, next_state, done))
 
     def sample(self, batch_size: int) -> List[Experience]:
         return random.sample(self.buffer, batch_size)

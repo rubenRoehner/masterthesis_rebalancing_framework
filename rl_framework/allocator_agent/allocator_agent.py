@@ -126,7 +126,7 @@ class AllocatorAgent:
         # exp.state is a 1D tensor [state_dim]. stack creates [batch_size, state_dim]
         state_batch = torch.stack([exp.state for exp in experiences]).to(self.device)
         action_indice_batch = torch.tensor(
-            [exp.action_indicies for exp in experiences], device=self.device
+            [exp.action_indices for exp in experiences], device=self.device
         )  # [batch_size, num_communities]
         reward_batch = torch.tensor(
             [exp.reward for exp in experiences], dtype=torch.float32, device=self.device

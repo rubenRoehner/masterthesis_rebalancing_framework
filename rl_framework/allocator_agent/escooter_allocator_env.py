@@ -94,7 +94,7 @@ class EscooterAllocatorEnv(gym.Env):
             )
         )
         self.current_dropoff_demand_forecast = (
-            self.pickup_demand_forecaster.predict_demand_per_community(
+            self.dropoff_demand_forecaster.predict_demand_per_community(
                 time_of_day=time_of_day, day=day, month=month
             )
         )
