@@ -1,14 +1,15 @@
 import torch.nn as nn
 import torch.nn.functional as F
-import torch
 
 
 class MultiHeadDQN(nn.Module):
-    def __init__(self, state_dim, num_actions_per_head, num_heads, hidden_dim=128):
+    def __init__(
+        self, state_dim, num_actions_per_head, num_heads, device, hidden_dim=128
+    ):
         super(MultiHeadDQN, self).__init__()
         self.num_heads = num_heads
         self.num_actions_per_head = num_actions_per_head
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
 
         # Shared layers
         self.shared_fc1 = nn.Linear(state_dim, hidden_dim, device=self.device)

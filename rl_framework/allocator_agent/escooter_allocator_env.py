@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 from typing import List
 import torch
 
-from rl_framework.demand_forecasting.demand_forecaster import DemandForecaster
-from rl_framework.demand_provider.demand_provider import DemandProvider
+from demand_forecasting.demand_forecaster import DemandForecaster
+from demand_provider.demand_provider import DemandProvider
 
 
 class EscooterAllocatorEnv(gym.Env):
@@ -16,6 +16,11 @@ class EscooterAllocatorEnv(gym.Env):
         features_per_community: int,
         action_values: List[int],
         max_steps: int,
+        pickup_demand_forecaster: DemandForecaster,
+        dropoff_demand_forecaster: DemandForecaster,
+        pickup_demand_provider: DemandProvider,
+        dropoff_demand_provider: DemandProvider,
+        device: torch.device,
         operator_rebalancing_cost: float = 0.5,
         start_time: datetime = datetime(2025, 2, 11, 14, 0),
         step_duration: timedelta = timedelta(minutes=60),
@@ -24,6 +29,8 @@ class EscooterAllocatorEnv(gym.Env):
         reward_weight_gini: float = -0.1,
     ):
         super(EscooterAllocatorEnv, self).__init__()
+
+        self.device = device
 
         self.num_communities = num_communities
         self.features_per_community = features_per_community
@@ -35,11 +42,11 @@ class EscooterAllocatorEnv(gym.Env):
         self.reward_weight_rebalancing = reward_weight_rebalancing
         self.reward_weight_gini = reward_weight_gini
 
-        self.pickup_demand_forecaster: DemandForecaster
-        self.dropoff_demand_forecaster: DemandForecaster
+        self.pickup_demand_forecaster: DemandForecaster = pickup_demand_forecaster
+        self.dropoff_demand_forecaster: DemandForecaster = dropoff_demand_forecaster
 
-        self.pickup_demand_provider: DemandProvider
-        self.dropoff_demand_provider: DemandProvider
+        self.pickup_demand_provider: DemandProvider = pickup_demand_provider
+        self.dropoff_demand_provider: DemandProvider = dropoff_demand_provider
 
         self.current_pickup_demand_forecast = np.zeros(num_communities)
         self.current_dropoff_demand_forecast = np.zeros(num_communities)
@@ -69,7 +76,7 @@ class EscooterAllocatorEnv(gym.Env):
             ]
             observation.extend(community_observation)
 
-        return torch.tensor(observation, dtype=torch.float32)
+        return torch.tensor(observation, dtype=torch.float32, device=self.device)
 
     def calculate_current_time(self):
         # Calculate the current time based on start_time, step_duration, and current_step
@@ -78,17 +85,17 @@ class EscooterAllocatorEnv(gym.Env):
     def generate_demand_forecast(self, current_time: datetime):
         # Get the current time of day, day of week, and month based on start_time, tep_duration and current_step
         time_of_day = current_time.hour
-        day_of_week = current_time.weekday()
+        day = current_time.day
         month = current_time.month
 
         self.current_pickup_demand_forecast = (
             self.pickup_demand_forecaster.predict_demand_per_community(
-                time_of_day=time_of_day, day_of_week=day_of_week, month=month
+                time_of_day=time_of_day, day=day, month=month
             )
         )
         self.current_dropoff_demand_forecast = (
             self.pickup_demand_forecaster.predict_demand_per_community(
-                time_of_day=time_of_day, day_of_week=day_of_week, month=month
+                time_of_day=time_of_day, day=day, month=month
             )
         )
 
@@ -132,12 +139,12 @@ class EscooterAllocatorEnv(gym.Env):
         total_satisfied_demand = 0
         pickup_demand = self.pickup_demand_provider.get_demand_per_community(
             time_of_day=self.start_time.hour,
-            day_of_week=self.start_time.weekday(),
+            day=self.start_time.day,
             month=self.start_time.month,
         )
         dropoff_demand = self.dropoff_demand_provider.get_demand_per_community(
             time_of_day=self.start_time.hour,
-            day_of_week=self.start_time.weekday(),
+            day=self.start_time.day,
             month=self.start_time.month,
         )
 

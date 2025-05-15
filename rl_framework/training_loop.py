@@ -1,17 +1,28 @@
 from datetime import datetime, timedelta
 from torch.utils.tensorboard.writer import SummaryWriter
 import torch
+import pandas as pd
 
-from rl_framework.allocator_agent.allocator_agent import AllocatorAgent
-from rl_framework.allocator_agent.escooter_allocator_env import EscooterAllocatorEnv
+from allocator_agent.allocator_agent import AllocatorAgent
+from allocator_agent.escooter_allocator_env import EscooterAllocatorEnv
+from demand_forecasting.IrConv_LSTM_demand_forecaster import (
+    IrConvLstmDemandForecaster,
+)
+from demand_provider.demand_provider_impl import DemandProviderImpl
 
 
 def main():
     # global parameters
     NUM_COMMUNITIES = 8
-    NUM_EPISODES = 1000
+    NUM_ZONES = 273
+    NUM_EPISODES = 100
     MAX_STEPS_PER_EPISODE = 100
     START_TIME = datetime(2025, 2, 11, 14, 0)
+
+    # [grid_id, community_id]
+    ZONE_COMMUNITY_MAP: pd.DataFrame = pd.read_pickle(
+        "/home/ruroit00/rebalancing_framework/processed_data/grid_community_map.pickle"
+    )
 
     # ALLOCATOR_AGENT parameters
     ALLOCATOR_AGENT_ACTION_VALUES = [-15, -10, -5, 0, 5, 10, 15]
@@ -19,7 +30,7 @@ def main():
         3  # forecast for pickup, forecast for dropoff, and current vehicle counts
     )
 
-    ALLOCATOR_AGENT_REPLAY_BUFFER_CAPACITY = 10000
+    ALLOCATOR_AGENT_REPLAY_BUFFER_CAPACITY = 24 * 30  # 24 hours * 30 days buffer
     ALLOCATOR_AGENT_BATCH_SIZE = 32
     ALLOCATOR_AGENT_HIDDEN_DIM = 128
 
@@ -28,15 +39,49 @@ def main():
 
     ALLOCATOR_AGENT_EPSILON_START = 1.0
     ALLOCATOR_AGENT_EPSILON_END = 0.01
-    ALLOCATOR_AGENT_EPSILON_DECAY = 0.995
+    ALLOCATOR_AGENT_EPSILON_DECAY = 0.9995
 
     ALLOCATOR_AGENT_STEP_DURATION = 60  # in minutes
+
+    DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
+    PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
 
     # REBALANCER_AGENT parameters
     # forecast for pickup, forecast for dropoff, and current vehicle counts
     # REBALANCER_AGENT_FEATURES_PER_ZONE = 3
 
     # --- INITIALIZE ENVIRONMENT ---
+    dropoff_demand_forecaster = IrConvLstmDemandForecaster(
+        num_communities=NUM_COMMUNITIES,
+        num_zones=NUM_ZONES,
+        zone_community_map=ZONE_COMMUNITY_MAP,
+        model_path="/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/models/irregular_convolution_LSTM_37_1747222620_dropoff.pkl",
+        demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
+    )
+
+    pickup_demand_forecaster = IrConvLstmDemandForecaster(
+        num_communities=NUM_COMMUNITIES,
+        num_zones=NUM_ZONES,
+        zone_community_map=ZONE_COMMUNITY_MAP,
+        model_path="/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/models/irregular_convolution_LSTM_29_1747224180_pickup.pkl",
+        demand_data_path=PICK_UP_DEMAND_DATA_PATH,
+    )
+
+    dropoff_demand_provider = DemandProviderImpl(
+        num_communities=NUM_COMMUNITIES,
+        num_zones=NUM_ZONES,
+        zone_community_map=ZONE_COMMUNITY_MAP,
+        demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
+    )
+
+    pickup_demand_provider = DemandProviderImpl(
+        num_communities=NUM_COMMUNITIES,
+        num_zones=NUM_ZONES,
+        zone_community_map=ZONE_COMMUNITY_MAP,
+        demand_data_path=PICK_UP_DEMAND_DATA_PATH,
+    )
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     allocator_env = EscooterAllocatorEnv(
         num_communities=NUM_COMMUNITIES,
@@ -45,6 +90,11 @@ def main():
         max_steps=MAX_STEPS_PER_EPISODE,
         step_duration=timedelta(minutes=ALLOCATOR_AGENT_STEP_DURATION),
         start_time=START_TIME,
+        dropoff_demand_forecaster=dropoff_demand_forecaster,
+        pickup_demand_forecaster=pickup_demand_forecaster,
+        dropoff_demand_provider=dropoff_demand_provider,
+        pickup_demand_provider=pickup_demand_provider,
+        device=device,
     )
 
     allocator_agent = AllocatorAgent(
@@ -59,6 +109,7 @@ def main():
         epsilon_decay=ALLOCATOR_AGENT_EPSILON_DECAY,
         batch_size=ALLOCATOR_AGENT_BATCH_SIZE,
         hidden_dim=ALLOCATOR_AGENT_HIDDEN_DIM,
+        device=device,
     )
 
     # Initialize TensorBoard writer
@@ -79,7 +130,7 @@ def main():
             "allocator_gamma": ALLOCATOR_AGENT_GAMMA,
             "allocator_batch_size": ALLOCATOR_AGENT_BATCH_SIZE,
             "allocator_replay_buffer_capacity": ALLOCATOR_AGENT_REPLAY_BUFFER_CAPACITY,
-            "allocator_action_values": ALLOCATOR_AGENT_ACTION_VALUES,
+            "allocator_action_values": ALLOCATOR_AGENT_ACTION_VALUES.__str__(),
             "allocator_features_per_community": ALLOCATOR_AGENT_FEATURES_PER_COMMUNITY,
         },
         {},

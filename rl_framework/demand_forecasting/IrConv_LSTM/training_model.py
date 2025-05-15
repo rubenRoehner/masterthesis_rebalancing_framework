@@ -37,7 +37,7 @@ def train_model(size_of_kernel=1):  # Set default kernel size to 1 for hexagonal
     period_size = 7
     trend_size = 2
     # For hexagonal grid, explicitly set the number of grid cells to match your data
-    num_grid_cells = 236  # Matches the number of columns in your dataset
+    num_grid_cells = 273  # Matches the number of columns in your dataset
     torch.cuda.manual_seed(50)
     # Training data loading
     dset = escooter_1h_9h3_STG(
@@ -46,7 +46,7 @@ def train_model(size_of_kernel=1):  # Set default kernel size to 1 for hexagonal
         trend=trend_size,
         start_date=start_date,
         end_date=end_date,
-        data_path="/home/ruroit00/rebalancing_framework/processed_data/bolt_dropoff_demand_h3_hourly.pickle",
+        data_path="/home/ruroit00/rebalancing_framework/processed_data/bolt_pickup_demand_h3_hourly.pickle",
     )
     train_loader = DataLoader(
         dset,
@@ -59,14 +59,14 @@ def train_model(size_of_kernel=1):  # Set default kernel size to 1 for hexagonal
     print("Training data loading complete.")
     # Validating data loading
     valid_start_date = "042100"  # date format: MMDDHH
-    valid_end_date = "042809"  # date format: MMDDHH
+    valid_end_date = "042808"  # date format: MMDDHH
     dset_vaild = escooter_1h_9h3_STG(
         closeness=closeness_size,
         period=period_size,
         trend=trend_size,
         start_date=valid_start_date,
         end_date=valid_end_date,
-        data_path="/home/ruroit00/rebalancing_framework/processed_data/bolt_dropoff_demand_h3_hourly.pickle",
+        data_path="/home/ruroit00/rebalancing_framework/processed_data/bolt_pickup_demand_h3_hourly.pickle",
     )
     vaild_loader = DataLoader(
         dset_vaild,
@@ -218,6 +218,5 @@ def train_model(size_of_kernel=1):  # Set default kernel size to 1 for hexagonal
 
 
 if __name__ == "__main__":
-    # Try a larger kernel size for hexagonal grid
-    # 7 represents a cell and its 6 direct neighbors in a hexagonal grid
+    # size of kernel represents number of semantic neighbors
     train_model(size_of_kernel=7)

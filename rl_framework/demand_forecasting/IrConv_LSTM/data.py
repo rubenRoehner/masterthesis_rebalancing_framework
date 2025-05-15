@@ -30,12 +30,17 @@ class escooter_1h_9h3_STG(Dataset):
             return
 
         counts_df = pd.read_pickle(data_path)
-        counts_df.columns = sorted(counts_df.columns)
+        # sort columns
+        counts_df = counts_df.reindex(sorted(counts_df.columns), axis=1)
+        counts_df = add_missing_rows(counts_df)
+        print("Data shape:", counts_df.shape)
 
-        self.zeros_grids = counts_df.values
+        self.zeros_grids = counts_df.values.reshape(
+            counts_df.shape[0], counts_df.shape[1], 1
+        )
 
         index_to_date_dict, date_to_index_dict = date_to_index(
-            counts_df[0].index, counts_df[-1].index
+            counts_df.index[0], counts_df.index[-2]
         )
         self.zeros_grids_new = {}
         for index in range(len(date_to_index_dict)):
@@ -149,3 +154,16 @@ def maxminscaler_3d(tensor_3d, range=(0, 1)):
     X_std = (tensor_3d - scaler_min) / (scaler_max - scaler_min)
     X_scaled = X_std * (range[1] - range[0]) + range[0]
     return X_scaled, scaler_max, scaler_min
+
+
+def add_missing_rows(df):
+    # Create a complete date range
+    all_dates = pd.date_range(start=df.index.min(), end=df.index.max(), freq="h")
+
+    # Reindex the DataFrame to include all dates
+    df = df.reindex(all_dates)
+
+    # Fill missing values with 0
+    df.fillna(0, inplace=True)
+
+    return df

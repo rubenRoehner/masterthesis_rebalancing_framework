@@ -1,5 +1,5 @@
-from rl_framework.allocator_agent.multi_head_dqn import MultiHeadDQN
-from rl_framework.allocator_agent.replay_buffer import ReplayBuffer
+from allocator_agent.multi_head_dqn import MultiHeadDQN
+from allocator_agent.replay_buffer import ReplayBuffer
 import torch
 from typing import List
 
@@ -10,6 +10,7 @@ class AllocatorAgent:
         state_dim,
         num_communities,
         action_values,
+        device: torch.device,
         replay_buffer_capacity=10000,
         learning_rate=0.001,
         gamma=0.99,
@@ -28,17 +29,21 @@ class AllocatorAgent:
         self.action_values = action_values
         self.num_actions_per_head = len(action_values)
 
+        self.device = device
+
         self.policy_network = MultiHeadDQN(
             state_dim=state_dim,
             num_actions_per_head=self.num_actions_per_head,
             num_heads=num_communities,
             hidden_dim=hidden_dim,
+            device=self.device,
         )
         self.target_network = MultiHeadDQN(
             state_dim=state_dim,
             num_actions_per_head=self.num_actions_per_head,
             num_heads=num_communities,
             hidden_dim=hidden_dim,
+            device=self.device,
         )
         self.target_network.load_state_dict(self.policy_network.state_dict())
         self.target_network.eval()
@@ -118,18 +123,20 @@ class AllocatorAgent:
         experiences = self.replay_buffer.sample(self.batch_size)
 
         # exp.state is a 1D tensor [state_dim]. stack creates [batch_size, state_dim]
-        state_batch = torch.stack([exp.state for exp in experiences])
+        state_batch = torch.stack([exp.state for exp in experiences]).to(self.device)
         action_indice_batch = torch.tensor(
-            [exp.action_indicies for exp in experiences]
+            [exp.action_indicies for exp in experiences], device=self.device
         )  # [batch_size, num_communities]
         reward_batch = torch.tensor(
-            [exp.reward for exp in experiences], dtype=torch.float32
+            [exp.reward for exp in experiences], dtype=torch.float32, device=self.device
         )  # [batch_size]
 
         # exp.next_state is a 1D tensor [state_dim]. stack creates [batch_size, state_dim]
-        next_state_batch = torch.stack([exp.next_state for exp in experiences])
+        next_state_batch = torch.stack([exp.next_state for exp in experiences]).to(
+            self.device
+        )
         done_batch = torch.tensor(
-            [exp.done for exp in experiences], dtype=torch.float32
+            [exp.done for exp in experiences], dtype=torch.float32, device=self.device
         )  # [batch_size]
 
         # Compute Q-values for the current states
@@ -189,7 +196,7 @@ class AllocatorAgent:
 
         self.train_step_counter += 1
 
-        # Update the target network
+        # Update the target network every target_update_freq steps
         if self.train_step_counter % self.target_update_freq == 0:
             self.update_target_network()
 

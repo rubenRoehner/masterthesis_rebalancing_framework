@@ -1,9 +1,18 @@
-from demand_forecaster import DemandForecaster
+from demand_forecasting.demand_forecaster import DemandForecaster
 
 import numpy as np
 import pandas as pd
 import torch
 from torch.autograd import Variable
+import sys
+
+# import IrConv_LSTM model for torch.load
+from demand_forecasting.IrConv_LSTM.model.irregular_convolution_LSTM import (
+    Irregular_Convolution_LSTM,  # noqa: F401
+    Extraction_spatial_features,  # noqa: F401
+    Convolution_LSTM,  # noqa: F401
+    irregular_convolution,  # noqa: F401
+)
 
 
 class IrConvLstmDemandForecaster(DemandForecaster):
@@ -18,7 +27,7 @@ class IrConvLstmDemandForecaster(DemandForecaster):
         Number of communities.
     num_zones : int
         Number of zones.
-    zone_community_map : np.ndarray
+    zone_community_map : pd.DataFrame
         A mapping of zones to communities. Shape: (num_zones, num_communities).
     model_path : str
         Path to the pre-trained IrConv-LSTM model.
@@ -36,7 +45,7 @@ class IrConvLstmDemandForecaster(DemandForecaster):
         self,
         num_communities: int,
         num_zones: int,
-        zone_community_map: np.ndarray,
+        zone_community_map: pd.DataFrame,
         model_path: str,
         demand_data_path: str,
         closeness_size: int = 24,
@@ -47,6 +56,10 @@ class IrConvLstmDemandForecaster(DemandForecaster):
         self.model_path = model_path
         use_cuda = torch.cuda.is_available()
         device = torch.device("cuda" if use_cuda else "cpu")
+
+        sys.path.append(
+            "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/IrConv_LSTM"
+        )
 
         self.model = torch.load(model_path, weights_only=False, map_location=device)
         self.model.eval()
@@ -69,17 +82,17 @@ class IrConvLstmDemandForecaster(DemandForecaster):
         self.period_size = period_size
         self.trend_size = trend_size
 
-    def get_demand_per_zone(
-        self, time_of_day: int, day_of_week: int, month: int
+    def predict_demand_per_zone(
+        self, time_of_day: int, day: int, month: int
     ) -> np.ndarray:
         """
         Get demand per zone for the given time of day, day of week, and month.
         """
 
         prediction = self.perform_inference(
-            self.get_closeness_data(time_of_day, day_of_week, month),
-            self.get_period_data(time_of_day, day_of_week, month),
-            self.get_trend_data(time_of_day, day_of_week, month),
+            self.get_closeness_data(time_of_day, day, month),
+            self.get_period_data(time_of_day, day, month),
+            self.get_trend_data(time_of_day, day, month),
         )
         # Rescale the prediction
         prediction = (
@@ -88,19 +101,31 @@ class IrConvLstmDemandForecaster(DemandForecaster):
 
         return prediction
 
-    def get_demand_per_community(
-        self, time_of_day: int, day_of_week: int, month: int
+    def predict_demand_per_community(
+        self, time_of_day: int, day: int, month: int
     ) -> np.ndarray:
         """
         Get demand per community for the given time of day, day of week, and month.
         """
-        zone_demand = self.get_demand_per_zone(time_of_day, day_of_week, month)
+        zone_demand_values = self.predict_demand_per_zone(time_of_day, day, month)
+        zone_indices = sorted(self.zone_community_map["grid_index"].values)
+        zone_demand = pd.DataFrame(
+            zone_demand_values, index=zone_indices, columns=["demand"]
+        )
+        zone_demand = pd.merge(
+            zone_demand,
+            self.zone_community_map,
+            left_index=True,
+            right_on="grid_index",
+            how="left",
+        )
 
-        community_demand = np.zeros(self.num_communities)
-        for community in range(self.num_communities):
-            zone_indices = np.where(self.zone_community_map[:, community] == 1)[0]
-            community_demand[community] = np.sum(zone_demand[zone_indices])
-        return community_demand
+        # group by community index and sum the demand
+        community_demand = zone_demand.groupby("community_index").sum()
+        community_demand.sort_index(inplace=True)
+        community_demand.drop(columns=["grid_index"], inplace=True)
+        # return demand per community as a numpy array
+        return community_demand["demand"].to_numpy()
 
     def _maxminscaler_3d(self, tensor_3d: np.ndarray, data_range=(0, 1)):
         """
@@ -117,18 +142,18 @@ class IrConvLstmDemandForecaster(DemandForecaster):
             X_scaled = X_std * (data_range[1] - data_range[0]) + data_range[0]
         return X_scaled, scaler_max, scaler_min
 
-    def _get_target_index(self, time_of_day: int, day_of_week: int, month: int) -> int:
+    def _get_target_index(self, time_of_day: int, day: int, month: int) -> int:
         # Filter index based on time components
         matching_timestamps = self.demand_data.index[
             (self.demand_data.index.hour == time_of_day)
-            & (self.demand_data.index.dayofweek == day_of_week)
+            & (self.demand_data.index.day == day)
             & (self.demand_data.index.month == month)
         ]
 
         if matching_timestamps.empty:
             raise ValueError(
                 f"No historical data found for time_of_day={time_of_day}, "
-                f"day_of_week={day_of_week}, month={month} in the provided demand data."
+                f"day={day}, month={month} in the provided demand data."
             )
 
         current_dt = matching_timestamps[-1]  # Get the most recent matching timestamp
@@ -180,15 +205,13 @@ class IrConvLstmDemandForecaster(DemandForecaster):
 
         return prediction_np
 
-    def get_closeness_data(
-        self, time_of_day: int, day_of_week: int, month: int
-    ) -> np.ndarray:
+    def get_closeness_data(self, time_of_day: int, day: int, month: int) -> np.ndarray:
         """
         Get closeness data for the given date.
         Output shape: (closeness_size, num_zones, 1)
         Order: T-closeness_size, ..., T-1
         """
-        target_idx = self._get_target_index(time_of_day, day_of_week, month)
+        target_idx = self._get_target_index(time_of_day, day, month)
 
         closeness_data_list = []
         for c_offset_val in range(
@@ -207,15 +230,13 @@ class IrConvLstmDemandForecaster(DemandForecaster):
             return np.zeros((self.closeness_size, self.num_zones, 1), dtype=np.float32)
         return np.array(closeness_data_list, dtype=np.float32)
 
-    def get_period_data(
-        self, time_of_day: int, day_of_week: int, month: int
-    ) -> np.ndarray:
+    def get_period_data(self, time_of_day: int, day: int, month: int) -> np.ndarray:
         """
         Get period data for the given date.
         Output shape: (period_size, num_zones, 1)
         Order: T-(period_size*24h), ..., T-(1*24h)
         """
-        target_idx = self._get_target_index(time_of_day, day_of_week, month)
+        target_idx = self._get_target_index(time_of_day, day, month)
 
         period_data_list = []
         for p_val in range(self.period_size, 0, -1):  # Iterates period_size, ..., 1
@@ -226,15 +247,13 @@ class IrConvLstmDemandForecaster(DemandForecaster):
             return np.zeros((self.period_size, self.num_zones, 1), dtype=np.float32)
         return np.array(period_data_list, dtype=np.float32)
 
-    def get_trend_data(
-        self, time_of_day: int, day_of_week: int, month: int
-    ) -> np.ndarray:
+    def get_trend_data(self, time_of_day: int, day: int, month: int) -> np.ndarray:
         """
         Get trend data for the given date.
         Output shape: (trend_size, num_zones, 1)
         Order: T-(trend_size*168h), ..., T-(1*168h)
         """
-        target_idx = self._get_target_index(time_of_day, day_of_week, month)
+        target_idx = self._get_target_index(time_of_day, day, month)
 
         trend_data_list = []
         for t_val in range(self.trend_size, 0, -1):  # Iterates trend_size, ..., 1

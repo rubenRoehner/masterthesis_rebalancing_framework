@@ -372,7 +372,7 @@ def reconstruction_file(kernel_size, num_nodes):  # Added num_nodes parameter
     :return: mask: np.ndarray of shape (N, N), dtype=int.
     """
     # 1) Load the full similarity dataframe
-    similarity_csv_path = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/IrConv_LSTM/data/similarity_matrix_dropoff.csv"
+    similarity_csv_path = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/IrConv_LSTM/data/similarity_matrix_pickup.csv"
     df = pd.read_csv(similarity_csv_path, index_col=0)
 
     # 2) Build a mapping from node-id to row index and verify num_nodes
