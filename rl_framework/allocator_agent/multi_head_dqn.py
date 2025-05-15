@@ -11,6 +11,9 @@ class MultiHeadDQN(nn.Module):
         self.num_actions_per_head = num_actions_per_head
         self.device = device
 
+        # input normalization
+        self.input_norm = nn.LayerNorm(state_dim, device=self.device)
+
         # Shared layers
         self.shared_fc1 = nn.Linear(state_dim, hidden_dim, device=self.device)
         self.shared_fc2 = nn.Linear(hidden_dim, hidden_dim, device=self.device)
@@ -28,6 +31,9 @@ class MultiHeadDQN(nn.Module):
         )
 
     def forward(self, state):
+        # Normalize the input state
+        x = self.input_norm(state)
+
         # Pass through shared layers
         x = F.relu(self.shared_fc1(state))
         x = F.relu(self.shared_fc2(x))
