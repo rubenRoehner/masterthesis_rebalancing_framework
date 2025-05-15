@@ -150,14 +150,14 @@ class EscooterAllocatorEnv(gym.Env):
 
         # Calculate total satisfied demand based on vehicle counts and demand
         for i in range(self.num_communities):
-            # Satisfied demand is the minimum of available vehicles and demand
-            satisfied_demand = min(
-                self.current_vehicle_counts[i], -pickup_demand[i] + dropoff_demand[i]
-            )
-            total_satisfied_demand += satisfied_demand
-
-            # Update vehicle counts based on satisfied demand
-            self.current_vehicle_counts[i] -= satisfied_demand
+            updated_vehicle_count = self.current_vehicle_counts[i] + dropoff_demand[i]
+            if updated_vehicle_count > pickup_demand[i]:
+                updated_vehicle_count -= pickup_demand[i]
+                total_satisfied_demand += pickup_demand[i]
+            else:
+                total_satisfied_demand += updated_vehicle_count
+                updated_vehicle_count = 0
+            self.current_vehicle_counts[i] = updated_vehicle_count
 
         # --- calculate reward ---
         rebalancing_cost = total_vehicles_rebalanced * self.operator_rebalancing_cost
