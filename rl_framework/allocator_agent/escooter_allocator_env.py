@@ -106,21 +106,41 @@ class EscooterAllocatorEnv(gym.Env):
         self,
         total_satisfied_demand: int,
         offered_demand: int,
-        rebalancing_cost,
-        gini_coefficient,
-    ):
+        total_vehicles_rebalanced: int,
+        gini_coefficient: float,
+    ) -> float:
         norm_satisified_demand = (
             total_satisfied_demand / offered_demand if offered_demand > 0 else 1
         )
-        return (
-            self.reward_weight_demand * norm_satisified_demand
-            + self.reward_weight_rebalancing * rebalancing_cost
-            + self.reward_weight_gini * gini_coefficient
+
+        gini_reward = 1 - gini_coefficient
+
+        rebalancing_ratio = total_vehicles_rebalanced / self.fleet_size
+        rebalancing_reward = 1 - rebalancing_ratio
+
+        total_weight = (
+            self.reward_weight_demand
+            + self.reward_weight_rebalancing
+            + self.reward_weight_gini
         )
 
-    def calculate_gini_coefficient(self):
-        # based on self.current_vehicle_counts
-        return 0.0  # Placeholder for Gini coefficient calculation
+        reward = norm_satisified_demand * self.reward_weight_demand / total_weight
+        reward += rebalancing_reward * self.reward_weight_rebalancing / total_weight
+        reward += gini_reward * self.reward_weight_gini / total_weight
+
+        return float(np.clip(reward, 0, 1))
+
+    def calculate_gini_coefficient(self) -> float:
+        array = np.array(self.current_vehicle_counts, dtype=float)
+        size = array.size
+        mean = array.mean()
+
+        if mean == 0:
+            return 0
+
+        diff = np.abs(np.subtract.outer(array, array))
+        gini = diff.sum() / (2 * size**2 * mean)
+        return gini
 
     def update_vehicle_counts(self, actions: np.ndarray) -> int:
         neg_rebalancing_operations = -actions[
@@ -231,13 +251,10 @@ class EscooterAllocatorEnv(gym.Env):
                 updated_vehicle_count = 0
             self.current_vehicle_counts[i] = updated_vehicle_count
 
-        # --- calculate reward ---
-        rebalancing_cost = total_vehicles_rebalanced * self.operator_rebalancing_cost
-
         reward = self.calculate_reward(
             total_satisfied_demand=total_satisfied_demand,
             offered_demand=sum(pickup_demand),
-            rebalancing_cost=rebalancing_cost,
+            total_vehicles_rebalanced=total_vehicles_rebalanced,
             gini_coefficient=self.calculate_gini_coefficient(),
         )
 
