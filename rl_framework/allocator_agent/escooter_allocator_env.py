@@ -266,7 +266,9 @@ class EscooterAllocatorEnv(gym.Env):
         terminated = False
         truncated = self.current_step >= self.max_steps
 
-        info = {}
+        info = {
+            "total_vehicles_rebalanced": total_vehicles_rebalanced,
+        }
 
         return next_observation, reward, terminated, truncated, info
 

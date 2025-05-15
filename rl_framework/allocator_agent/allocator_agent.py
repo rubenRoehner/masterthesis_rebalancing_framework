@@ -170,6 +170,13 @@ class AllocatorAgent:
                 * stacked_next_max_q_values  # [batch_size, num_communities]
             )  # Result is [batch_size, num_communities]
 
+        # Compute TD errors for logging
+        td_errors_per_head = [
+            (target_q_values[:, i].unsqueeze(1) - current_q_values_selected_list[i])
+            for i in range(self.num_communities)
+        ]
+        td_errors = torch.cat(td_errors_per_head, dim=1).detach()
+
         # Compute the loss
         per_head_losses = [
             F.huber_loss(
@@ -196,4 +203,4 @@ class AllocatorAgent:
         # Update epsilon
         self.update_epsilon()
 
-        return loss.item()
+        return loss.item(), td_errors

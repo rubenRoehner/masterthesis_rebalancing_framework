@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from torch.utils.tensorboard.writer import SummaryWriter
 import torch
 import pandas as pd
+import numpy as np
 
 from allocator_agent.allocator_agent import AllocatorAgent
 from allocator_agent.escooter_allocator_env import EscooterAllocatorEnv
@@ -16,7 +17,7 @@ def main():
     NUM_COMMUNITIES = 8
     NUM_ZONES = 273
     FLEET_SIZE = 400
-    NUM_EPISODES = 100
+    NUM_EPISODES = 500
     MAX_STEPS_PER_EPISODE = 100
     START_TIME = datetime(2025, 2, 11, 14, 0)
 
@@ -149,15 +150,21 @@ def main():
         {},
     )
 
+    global_step = 0
+
     for episode in range(NUM_EPISODES):
         current_observation, info = allocator_env.reset()
         total_episode_reward = 0
         episode_loss = 0
         num_training_steps = 0
 
+        episode_vehicles_rebalanced = 0
+        actions_this_episode = []
+
         for step in range(MAX_STEPS_PER_EPISODE):
             # Get action from the allocator agent
             action = allocator_agent.select_action(current_observation)
+            actions_this_episode.append(action)
 
             # Take action in the environment
             next_observation, reward, terminated, truncated, info = allocator_env.step(
@@ -169,14 +176,20 @@ def main():
                 current_observation, action, reward, next_observation, done
             )
 
-            loss = allocator_agent.train()
-            if loss is not None:
+            output = allocator_agent.train()
+            if output is not None:
+                loss, td_errors = output
                 episode_loss += loss
                 num_training_steps += 1
+
+                writer.add_scalar("TD_Error/Mean", td_errors.abs().mean(), global_step)
+                writer.add_scalar("TD_Error/Max", td_errors.abs().max(), global_step)
 
             current_observation = next_observation
             total_episode_reward += reward
 
+            episode_vehicles_rebalanced += info["total_vehicles_rebalanced"]
+            global_step += 1
             if done:
                 break
 
@@ -186,9 +199,23 @@ def main():
             writer.add_scalar(
                 "Loss/Episode_Avg", episode_loss / num_training_steps, episode
             )
+        # Log current epsilon
+        writer.add_scalar("Epsilon/Episode", allocator_agent.epsilon, episode)
+
+        # Log  vehicles rebalanced
         writer.add_scalar(
-            "Epsilon/Episode", allocator_agent.epsilon, episode
-        )  # Log current epsilon
+            "VehiclesRebalanced/Episode", episode_vehicles_rebalanced, episode
+        )
+
+        # Log actions per head as histogram
+        actions_array = np.array(actions_this_episode, dtype=int)
+        for head in range(NUM_COMMUNITIES):
+            writer.add_histogram(
+                f"Action/Head{head}", actions_array[:, head], global_step=episode
+            )
+
+        # log Buffer size
+        writer.add_scalar("Buffer/Size", len(allocator_agent.replay_buffer), episode)
 
         print(
             f"Episode {episode + 1}/{NUM_EPISODES}, Total Reward: {total_episode_reward:.2f}, Epsilon: {allocator_agent.epsilon:.2f}"
