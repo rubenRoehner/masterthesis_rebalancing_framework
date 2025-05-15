@@ -84,10 +84,7 @@ class AllocatorAgent:
         else:
             # Exploit: select the action with the highest Q-value
             with torch.no_grad():
-                self.policy_network.eval()
-                # policy_network returns a list of tensors
                 q_values_list = self.policy_network(state_tensor)
-                self.policy_network.train()
                 action_indices = torch.tensor(
                     [
                         torch.argmax(head_q_values, dim=1).item()
@@ -175,7 +172,7 @@ class AllocatorAgent:
 
         # Compute the loss
         per_head_losses = [
-            F.mse_loss(
+            F.huber_loss(
                 current_q_values_selected_list[i],
                 target_q_values[:, i].unsqueeze(1),
                 reduction="mean",
