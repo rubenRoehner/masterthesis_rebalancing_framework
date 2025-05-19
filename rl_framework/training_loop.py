@@ -4,8 +4,10 @@ import torch
 import pandas as pd
 import numpy as np
 
-from allocator_agent.allocator_agent import AllocatorAgent
-from allocator_agent.escooter_allocator_env import EscooterAllocatorEnv
+from regional_distribution_coordinator.regional_distribution_coordinator import (
+    RegionalDistributionCoordinator,
+)
+from regional_distribution_coordinator.escooter_rdc_env import EscooterRDCEnv
 from demand_forecasting.IrConv_LSTM_demand_forecaster import (
     IrConvLstmDemandForecaster,
 )
@@ -17,7 +19,7 @@ def main():
     NUM_COMMUNITIES = 8
     NUM_ZONES = 273
     FLEET_SIZE = 400
-    NUM_EPISODES = 500
+    NUM_EPISODES = 10
     MAX_STEPS_PER_EPISODE = 100
     START_TIME = datetime(2025, 2, 11, 14, 0)
 
@@ -26,30 +28,30 @@ def main():
         "/home/ruroit00/rebalancing_framework/processed_data/grid_community_map.pickle"
     )
 
-    # ALLOCATOR_AGENT parameters
-    ALLOCATOR_AGENT_ACTION_VALUES = [-15, -10, -5, 0, 5, 10, 15]
-    ALLOCATOR_AGENT_FEATURES_PER_COMMUNITY = (
+    # RegionalDistributionCoordinator parameters
+    RDC_ACTION_VALUES = [-15, -10, -5, 0, 5, 10, 15]
+    RDC_FEATURES_PER_COMMUNITY = (
         3  # forecast for pickup, forecast for dropoff, and current vehicle counts
     )
 
-    ALLOCATOR_AGENT_REPLAY_BUFFER_CAPACITY = 24 * 30  # 24 hours * 30 days buffer
-    ALLOCATOR_AGENT_BATCH_SIZE = 128
-    ALLOCATOR_AGENT_HIDDEN_DIM = 128
+    RDC_REPLAY_BUFFER_CAPACITY = 24 * 30  # 24 hours * 30 days buffer
+    RDC_BATCH_SIZE = 128
+    RDC_HIDDEN_DIM = 128
 
-    ALLOCATOR_AGENT_TARGET_UPDATE_FREQ = 1000
-    ALLOCATOR_AGENT_LR = 1e-5
-    ALLOCATOR_AGENT_GAMMA = 0.99
+    RDC_TARGET_UPDATE_FREQ = 1000
+    RDC_LR = 1e-5
+    RDC_GAMMA = 0.99
 
-    ALLOCATOR_AGENT_EPSILON_START = 1.0
-    ALLOCATOR_AGENT_EPSILON_END = 0.01
-    ALLOCATOR_AGENT_EPSILON_DECAY = 0.999
+    RDC_EPSILON_START = 1.0
+    RDC_EPSILON_END = 0.01
+    RDC_EPSILON_DECAY = 0.999
 
-    ALLOCATOR_AGENT_STEP_DURATION = 60  # in minutes
+    RDC_STEP_DURATION = 60  # in minutes
 
-    ALLOCATOR_AGENT_OPERATOR_REBALANCING_COST = 0.5
-    ALLOCATOR_AGENT_REWARD_WEIGHT_DEMAND = 1.0
-    ALLOCATOR_AGENT_REWARD_WEIGHT_REBALANCING = 0
-    ALLOCATOR_AGENT_REWARD_WEIGHT_GINI = 0
+    RDC_OPERATOR_REBALANCING_COST = 0.5
+    RDC_REWARD_WEIGHT_DEMAND = 1.0
+    RDC_REWARD_WEIGHT_REBALANCING = 0
+    RDC_REWARD_WEIGHT_GINI = 0
 
     DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
     PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
@@ -91,17 +93,17 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    allocator_env = EscooterAllocatorEnv(
+    rdc_env = EscooterRDCEnv(
         num_communities=NUM_COMMUNITIES,
-        features_per_community=ALLOCATOR_AGENT_FEATURES_PER_COMMUNITY,
-        action_values=ALLOCATOR_AGENT_ACTION_VALUES,
+        features_per_community=RDC_FEATURES_PER_COMMUNITY,
+        action_values=RDC_ACTION_VALUES,
         max_steps=MAX_STEPS_PER_EPISODE,
-        step_duration=timedelta(minutes=ALLOCATOR_AGENT_STEP_DURATION),
+        step_duration=timedelta(minutes=RDC_STEP_DURATION),
         start_time=START_TIME,
-        operator_rebalancing_cost=ALLOCATOR_AGENT_OPERATOR_REBALANCING_COST,
-        reward_weight_demand=ALLOCATOR_AGENT_REWARD_WEIGHT_DEMAND,
-        reward_weight_rebalancing=ALLOCATOR_AGENT_REWARD_WEIGHT_REBALANCING,
-        reward_weight_gini=ALLOCATOR_AGENT_REWARD_WEIGHT_GINI,
+        operator_rebalancing_cost=RDC_OPERATOR_REBALANCING_COST,
+        reward_weight_demand=RDC_REWARD_WEIGHT_DEMAND,
+        reward_weight_rebalancing=RDC_REWARD_WEIGHT_REBALANCING,
+        reward_weight_gini=RDC_REWARD_WEIGHT_GINI,
         dropoff_demand_forecaster=dropoff_demand_forecaster,
         pickup_demand_forecaster=pickup_demand_forecaster,
         dropoff_demand_provider=dropoff_demand_provider,
@@ -110,25 +112,25 @@ def main():
         fleet_size=FLEET_SIZE,
     )
 
-    allocator_agent = AllocatorAgent(
-        state_dim=NUM_COMMUNITIES * ALLOCATOR_AGENT_FEATURES_PER_COMMUNITY,
+    rdc_agent = RegionalDistributionCoordinator(
+        state_dim=NUM_COMMUNITIES * RDC_FEATURES_PER_COMMUNITY,
         num_communities=NUM_COMMUNITIES,
-        action_values=ALLOCATOR_AGENT_ACTION_VALUES,
-        replay_buffer_capacity=ALLOCATOR_AGENT_REPLAY_BUFFER_CAPACITY,
-        learning_rate=ALLOCATOR_AGENT_LR,
-        gamma=ALLOCATOR_AGENT_GAMMA,
-        epsilon_start=ALLOCATOR_AGENT_EPSILON_START,
-        epsilon_end=ALLOCATOR_AGENT_EPSILON_END,
-        epsilon_decay=ALLOCATOR_AGENT_EPSILON_DECAY,
-        batch_size=ALLOCATOR_AGENT_BATCH_SIZE,
-        hidden_dim=ALLOCATOR_AGENT_HIDDEN_DIM,
-        target_update_freq=ALLOCATOR_AGENT_TARGET_UPDATE_FREQ,
+        action_values=RDC_ACTION_VALUES,
+        replay_buffer_capacity=RDC_REPLAY_BUFFER_CAPACITY,
+        learning_rate=RDC_LR,
+        gamma=RDC_GAMMA,
+        epsilon_start=RDC_EPSILON_START,
+        epsilon_end=RDC_EPSILON_END,
+        epsilon_decay=RDC_EPSILON_DECAY,
+        batch_size=RDC_BATCH_SIZE,
+        hidden_dim=RDC_HIDDEN_DIM,
+        target_update_freq=RDC_TARGET_UPDATE_FREQ,
         device=device,
     )
 
     # Initialize TensorBoard writer
     writer = SummaryWriter(
-        f"runs/allocator_agent_experiment_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        f"rl_framework/runs/regional_distribution_coordinator_experiment_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     )
 
     writer.add_hparams(
@@ -136,16 +138,16 @@ def main():
             "num_communities": NUM_COMMUNITIES,
             "num_episodes": NUM_EPISODES,
             "max_steps_per_episode": MAX_STEPS_PER_EPISODE,
-            "allocator_step_duration": ALLOCATOR_AGENT_STEP_DURATION,
-            "allocator_epsilon_start": ALLOCATOR_AGENT_EPSILON_START,
-            "allocator_epsilon_end": ALLOCATOR_AGENT_EPSILON_END,
-            "allocator_epsilon_decay": ALLOCATOR_AGENT_EPSILON_DECAY,
-            "allocator_learning_rate": ALLOCATOR_AGENT_LR,
-            "allocator_gamma": ALLOCATOR_AGENT_GAMMA,
-            "allocator_batch_size": ALLOCATOR_AGENT_BATCH_SIZE,
-            "allocator_replay_buffer_capacity": ALLOCATOR_AGENT_REPLAY_BUFFER_CAPACITY,
-            "allocator_action_values": ALLOCATOR_AGENT_ACTION_VALUES.__str__(),
-            "allocator_features_per_community": ALLOCATOR_AGENT_FEATURES_PER_COMMUNITY,
+            "rdc_step_duration": RDC_STEP_DURATION,
+            "rdc_epsilon_start": RDC_EPSILON_START,
+            "rdc_epsilon_end": RDC_EPSILON_END,
+            "rdc_epsilon_decay": RDC_EPSILON_DECAY,
+            "rdc_learning_rate": RDC_LR,
+            "rdc_gamma": RDC_GAMMA,
+            "rdc_batch_size": RDC_BATCH_SIZE,
+            "rdc_replay_buffer_capacity": RDC_REPLAY_BUFFER_CAPACITY,
+            "rdc_action_values": RDC_ACTION_VALUES.__str__(),
+            "rdc_features_per_community": RDC_FEATURES_PER_COMMUNITY,
         },
         {},
     )
@@ -153,7 +155,7 @@ def main():
     global_step = 0
 
     for episode in range(NUM_EPISODES):
-        current_observation, info = allocator_env.reset()
+        current_observation, info = rdc_env.reset()
         total_episode_reward = 0
         episode_loss = 0
         num_training_steps = 0
@@ -162,21 +164,19 @@ def main():
         actions_this_episode = []
 
         for step in range(MAX_STEPS_PER_EPISODE):
-            # Get action from the allocator agent
-            action = allocator_agent.select_action(current_observation)
+            # Get action from the rdc agent
+            action = rdc_agent.select_action(current_observation)
             actions_this_episode.append(action)
 
             # Take action in the environment
-            next_observation, reward, terminated, truncated, info = allocator_env.step(
-                action
-            )
+            next_observation, reward, terminated, truncated, info = rdc_env.step(action)
             done = terminated or truncated
 
-            allocator_agent.store_experience(
+            rdc_agent.store_experience(
                 current_observation, action, reward, next_observation, done
             )
 
-            output = allocator_agent.train()
+            output = rdc_agent.train()
             if output is not None:
                 loss, td_errors = output
                 episode_loss += loss
@@ -200,7 +200,7 @@ def main():
                 "Loss/Episode_Avg", episode_loss / num_training_steps, episode
             )
         # Log current epsilon
-        writer.add_scalar("Epsilon/Episode", allocator_agent.epsilon, episode)
+        writer.add_scalar("Epsilon/Episode", rdc_agent.epsilon, episode)
 
         # Log  vehicles rebalanced
         writer.add_scalar(
@@ -215,19 +215,19 @@ def main():
             )
 
         # log Buffer size
-        writer.add_scalar("Buffer/Size", len(allocator_agent.replay_buffer), episode)
+        writer.add_scalar("Buffer/Size", len(rdc_agent.replay_buffer), episode)
 
         print(
-            f"Episode {episode + 1}/{NUM_EPISODES}, Total Reward: {total_episode_reward:.2f}, Epsilon: {allocator_agent.epsilon:.2f}"
+            f"Episode {episode + 1}/{NUM_EPISODES}, Total Reward: {total_episode_reward:.2f}, Epsilon: {rdc_agent.epsilon:.2f}"
         )
         if num_training_steps > 0:
             print(f"Average Loss: {episode_loss / num_training_steps:.4f}")
 
     torch.save(
-        allocator_agent.policy_network.state_dict(),
-        f"allocator_agent_model_{datetime.now().strftime('%Y%m%d-%H%M%S')}.pth",
+        rdc_agent.policy_network.state_dict(),
+        f"rl_framework/runs/outputs/rdc_agent_model_{datetime.now().strftime('%Y%m%d-%H%M%S')}.pth",
     )
-    allocator_env.close()
+    rdc_env.close()
     writer.close()
     print("Training completed.")
 
