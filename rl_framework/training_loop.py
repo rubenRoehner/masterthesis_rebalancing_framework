@@ -19,7 +19,7 @@ def main():
     NUM_COMMUNITIES = 8
     NUM_ZONES = 273
     FLEET_SIZE = 1000
-    NUM_EPISODES = 500
+    NUM_EPISODES = 200
     MAX_STEPS_PER_EPISODE = 100
     START_TIME = datetime(2025, 2, 11, 14, 0)
 
@@ -40,6 +40,8 @@ def main():
 
     RDC_TARGET_UPDATE_FREQ = 1000
     RDC_LR = 5e-6
+    RDC_LR_STEP_SIZE = 1000
+    RDC_LR_GAMMA = 0.5
     RDC_GAMMA = 0.99
 
     RDC_EPSILON_START = 1.0
@@ -52,7 +54,7 @@ def main():
 
     RDC_OPERATOR_REBALANCING_COST = 0.5
     RDC_REWARD_WEIGHT_DEMAND = 1.0
-    RDC_REWARD_WEIGHT_REBALANCING = 0.5
+    RDC_REWARD_WEIGHT_REBALANCING = 1.0
     RDC_REWARD_WEIGHT_GINI = 0.25
 
     DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
@@ -120,6 +122,8 @@ def main():
         action_values=RDC_ACTION_VALUES,
         replay_buffer_capacity=RDC_REPLAY_BUFFER_CAPACITY,
         learning_rate=RDC_LR,
+        lr_step_size=RDC_LR_STEP_SIZE,
+        lr_gamma=RDC_LR_GAMMA,
         gamma=RDC_GAMMA,
         epsilon_start=RDC_EPSILON_START,
         epsilon_end=RDC_EPSILON_END,
@@ -146,6 +150,8 @@ def main():
             "rdc_epsilon_end": RDC_EPSILON_END,
             "rdc_epsilon_decay": RDC_EPSILON_DECAY,
             "rdc_learning_rate": RDC_LR,
+            "rdc_lr_step_size": RDC_LR_STEP_SIZE,
+            "rdc_lr_gamma": RDC_LR_GAMMA,
             "rdc_gamma": RDC_GAMMA,
             "rdc_batch_size": RDC_BATCH_SIZE,
             "rdc_replay_buffer_capacity": RDC_REPLAY_BUFFER_CAPACITY,

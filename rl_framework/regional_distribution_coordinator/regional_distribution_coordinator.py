@@ -3,6 +3,7 @@ from regional_distribution_coordinator.replay_buffer import ReplayBuffer
 import torch
 from typing import List
 import torch.nn.functional as F
+from torch.optim.lr_scheduler import StepLR
 
 
 class RegionalDistributionCoordinator:
@@ -22,6 +23,8 @@ class RegionalDistributionCoordinator:
         target_update_freq=10,
         tau=0.005,
         hidden_dim=128,
+        lr_step_size=1000,
+        lr_gamma=0.5,
     ):
         """
         RegionalDistributionCoordinator constructor.
@@ -66,6 +69,12 @@ class RegionalDistributionCoordinator:
         self.replay_buffer = ReplayBuffer(capacity=self.replay_buffer_capacity)
         self.optimizer = torch.optim.Adam(
             self.policy_network.parameters(), lr=self.learning_rate
+        )
+
+        self.scheduler = StepLR(
+            self.optimizer,
+            step_size=lr_step_size,  # every N steps
+            gamma=lr_gamma,  # multiply LR by this
         )
 
     def select_action(self, state: torch.Tensor) -> List[int]:
@@ -216,6 +225,9 @@ class RegionalDistributionCoordinator:
         # added gradient clipping to prevent exploding gradients
         torch.nn.utils.clip_grad_norm_(self.policy_network.parameters(), max_norm=10)
         self.optimizer.step()
+
+        # Update learning rate
+        self.scheduler.step()
 
         # Update target network
         self.soft_update()
