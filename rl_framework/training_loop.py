@@ -18,8 +18,8 @@ def main():
     # global parameters
     NUM_COMMUNITIES = 8
     NUM_ZONES = 273
-    FLEET_SIZE = 400
-    NUM_EPISODES = 10
+    FLEET_SIZE = 1000
+    NUM_EPISODES = 500
     MAX_STEPS_PER_EPISODE = 100
     START_TIME = datetime(2025, 2, 11, 14, 0)
 
@@ -34,24 +34,26 @@ def main():
         3  # forecast for pickup, forecast for dropoff, and current vehicle counts
     )
 
-    RDC_REPLAY_BUFFER_CAPACITY = 24 * 30  # 24 hours * 30 days buffer
-    RDC_BATCH_SIZE = 128
+    RDC_REPLAY_BUFFER_CAPACITY = 10000
+    RDC_BATCH_SIZE = 256
     RDC_HIDDEN_DIM = 128
 
     RDC_TARGET_UPDATE_FREQ = 1000
-    RDC_LR = 1e-5
+    RDC_LR = 5e-6
     RDC_GAMMA = 0.99
 
     RDC_EPSILON_START = 1.0
-    RDC_EPSILON_END = 0.01
+    RDC_EPSILON_END = 0.05
     RDC_EPSILON_DECAY = 0.999
+
+    RDC_TAU = 0.001
 
     RDC_STEP_DURATION = 60  # in minutes
 
     RDC_OPERATOR_REBALANCING_COST = 0.5
     RDC_REWARD_WEIGHT_DEMAND = 1.0
-    RDC_REWARD_WEIGHT_REBALANCING = 0
-    RDC_REWARD_WEIGHT_GINI = 0
+    RDC_REWARD_WEIGHT_REBALANCING = 0.5
+    RDC_REWARD_WEIGHT_GINI = 0.25
 
     DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
     PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
@@ -125,6 +127,7 @@ def main():
         batch_size=RDC_BATCH_SIZE,
         hidden_dim=RDC_HIDDEN_DIM,
         target_update_freq=RDC_TARGET_UPDATE_FREQ,
+        tau=RDC_TAU,
         device=device,
     )
 

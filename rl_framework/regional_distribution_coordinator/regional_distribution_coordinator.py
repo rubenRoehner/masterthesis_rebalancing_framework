@@ -20,6 +20,7 @@ class RegionalDistributionCoordinator:
         epsilon_decay=0.9995,
         batch_size=64,
         target_update_freq=10,
+        tau=0.005,
         hidden_dim=128,
     ):
         """
@@ -51,10 +52,12 @@ class RegionalDistributionCoordinator:
 
         self.gamma = gamma
         self.epsilon = epsilon_start
+        self.epsilon_start = epsilon_start
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_end
         self.batch_size = batch_size
         self.target_update_freq = target_update_freq
+        self.tau = tau
         self.train_step_counter = 0
 
         self.replay_buffer_capacity = replay_buffer_capacity
@@ -97,11 +100,29 @@ class RegionalDistributionCoordinator:
     def update_target_network(self):
         self.target_network.load_state_dict(self.policy_network.state_dict())
 
+    def soft_update(self):
+        """
+        θ_target ← τ·θ_policy + (1–τ)·θ_target
+        """
+        for targ_param, pol_param in zip(
+            self.target_network.parameters(), self.policy_network.parameters()
+        ):
+            targ_param.data.copy_(
+                self.tau * pol_param.data + (1.0 - self.tau) * targ_param.data
+            )
+
     def update_epsilon(self):
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
-        else:
-            self.epsilon = self.epsilon_min
+        """
+        Update epsilon value slower than the training step counter.
+        This is to ensure that the agent explores more in the beginning and
+        gradually shifts to exploitation.
+        The decay is exponential, so the epsilon value will decrease
+        exponentially over time.
+        """
+        self.epsilon = max(
+            self.epsilon_min,
+            self.epsilon_start * (self.epsilon_decay**self.train_step_counter),
+        )
 
     def store_experience(
         self,
@@ -196,11 +217,9 @@ class RegionalDistributionCoordinator:
         torch.nn.utils.clip_grad_norm_(self.policy_network.parameters(), max_norm=10)
         self.optimizer.step()
 
+        # Update target network
+        self.soft_update()
         self.train_step_counter += 1
-
-        # Update the target network every target_update_freq steps
-        if self.train_step_counter % self.target_update_freq == 0:
-            self.update_target_network()
 
         # Update epsilon
         self.update_epsilon()

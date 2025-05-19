@@ -104,31 +104,29 @@ class EscooterRDCEnv(gym.Env):
 
     def calculate_reward(
         self,
-        total_satisfied_demand: int,
-        offered_demand: int,
-        total_vehicles_rebalanced: int,
-        gini_coefficient: float,
-    ) -> float:
-        norm_satisified_demand = (
-            total_satisfied_demand / offered_demand if offered_demand > 0 else 1
-        )
+        total_satisfied_demand,
+        offered_demand,
+        total_vehicles_rebalanced,
+        gini_coefficient,
+    ):
+        # 1) satisfaction ratio
+        sat = total_satisfied_demand / offered_demand if offered_demand > 0 else 1.0
 
-        gini_reward = 1 - gini_coefficient
+        # 2) fairness
+        gini_r = 1.0 - gini_coefficient
 
-        rebalancing_ratio = total_vehicles_rebalanced / self.fleet_size
-        rebalancing_reward = 1 - rebalancing_ratio
+        # 3) quadratic rebalancing cost + dispatch overhead
+        reb_ratio = total_vehicles_rebalanced / self.fleet_size
+        reb_r = 1.0 - (reb_ratio**2)
 
-        total_weight = (
-            self.reward_weight_demand
-            + self.reward_weight_rebalancing
-            + self.reward_weight_gini
-        )
+        # 4) convex combination
+        wd = self.reward_weight_demand
+        wr = self.reward_weight_rebalancing
+        wg = self.reward_weight_gini
+        total_w = wd + wr + wg
 
-        reward = norm_satisified_demand * self.reward_weight_demand / total_weight
-        reward += rebalancing_reward * self.reward_weight_rebalancing / total_weight
-        reward += gini_reward * self.reward_weight_gini / total_weight
-
-        return float(np.clip(reward, 0, 1))
+        reward = (wd * sat + wr * reb_r + wg * gini_r) / total_w
+        return float(np.clip(reward, 0.0, 1.0))
 
     def calculate_gini_coefficient(self) -> float:
         array = np.array(self.current_vehicle_counts, dtype=float)
