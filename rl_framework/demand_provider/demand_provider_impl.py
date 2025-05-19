@@ -62,3 +62,28 @@ class DemandProviderImpl(DemandProvider):
 
         # return demand per community as a numpy array
         return community_demand["demand"].to_numpy()
+
+    def get_demand_per_zone_community(
+        self, time_of_day: int, day: int, month: int, community_id: str
+    ) -> np.ndarray:
+        """
+        Get demand per zone for a given time of day, day of week, and month.
+        """
+        # Convert to datetime
+        dt = datetime(year=2025, month=month, day=day, hour=time_of_day)
+
+        # Filter demand data for the specified time
+        demand_data_filtered = self.demand_data.loc[dt]
+
+        # Filter demand data for the specified community
+        community_demand = demand_data_filtered[
+            self.zone_community_map["community_index"] == community_id
+        ]
+
+        # sort columns
+        community_demand = community_demand.reindex(
+            sorted(community_demand.columns),
+        )
+
+        # Return demand per zone as a numpy array
+        return community_demand.to_numpy()

@@ -24,3 +24,9 @@ class DemandProvider(ABC):
         self, time_of_day: int, day: int, month: int
     ) -> np.ndarray:
         pass
+
+    @abstractmethod
+    def get_demand_per_zone_community(
+        self, time_of_day: int, day: int, month: int, community_id: str
+    ) -> np.ndarray:
+        pass

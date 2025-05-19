@@ -127,6 +127,31 @@ class IrConvLstmDemandForecaster(DemandForecaster):
         # return demand per community as a numpy array
         return community_demand["demand"].to_numpy()
 
+    def predict_demand_per_zone_community(
+        self, time_of_day: int, day: int, month: int, community_id: str
+    ) -> np.ndarray:
+        """
+        Get demand per zone for the given time of day, day of week, and month.
+        """
+        zone_demand_values = self.predict_demand_per_zone(time_of_day, day, month)
+        zone_indices = sorted(self.zone_community_map["grid_index"].values)
+        zone_demand = pd.DataFrame(
+            zone_demand_values, index=zone_indices, columns=["demand"]
+        )
+        zone_demand = pd.merge(
+            zone_demand,
+            self.zone_community_map,
+            left_index=True,
+            right_on="grid_index",
+            how="left",
+        )
+
+        # filter by community id
+        community_demand = zone_demand[zone_demand["community_index"] == community_id][
+            "demand"
+        ].to_numpy()
+        return community_demand
+
     def _maxminscaler_3d(self, tensor_3d: np.ndarray, data_range=(0, 1)):
         """
         Scales a 3D numpy array to a given range using global min/max. Like the implementation of the IrConv-LSTM model.
