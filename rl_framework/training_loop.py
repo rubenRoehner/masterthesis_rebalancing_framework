@@ -19,7 +19,7 @@ def main():
     NUM_COMMUNITIES = 8
     NUM_ZONES = 273
     FLEET_SIZE = 1000
-    NUM_EPISODES = 200
+    NUM_EPISODES = 1000
     MAX_STEPS_PER_EPISODE = 100
     START_TIME = datetime(2025, 2, 11, 14, 0)
 
@@ -36,7 +36,8 @@ def main():
 
     RDC_REPLAY_BUFFER_CAPACITY = 10000
     RDC_REPLAY_BUFFER_ALPHA = 0.6
-    RDC_REPLAY_BUFFER_BETA = 0.4
+    RDC_REPLAY_BUFFER_BETA_START = 0.4
+    RDC_REPLAY_BUFFER_BETA_FRAMES = 50_000
 
     RDC_BATCH_SIZE = 256
     RDC_HIDDEN_DIM = 128
@@ -125,7 +126,8 @@ def main():
         action_values=RDC_ACTION_VALUES,
         replay_buffer_capacity=RDC_REPLAY_BUFFER_CAPACITY,
         replay_buffer_alpha=RDC_REPLAY_BUFFER_ALPHA,
-        replay_buffer_beta=RDC_REPLAY_BUFFER_BETA,
+        replay_buffer_beta_start=RDC_REPLAY_BUFFER_BETA_START,
+        replay_buffer_beta_frames=RDC_REPLAY_BUFFER_BETA_FRAMES,
         learning_rate=RDC_LR,
         lr_step_size=RDC_LR_STEP_SIZE,
         lr_gamma=RDC_LR_GAMMA,
@@ -160,8 +162,18 @@ def main():
             "rdc_gamma": RDC_GAMMA,
             "rdc_batch_size": RDC_BATCH_SIZE,
             "rdc_replay_buffer_capacity": RDC_REPLAY_BUFFER_CAPACITY,
+            "rdc_replay_buffer_alpha": RDC_REPLAY_BUFFER_ALPHA,
+            "rdc_replay_buffer_beta_start": RDC_REPLAY_BUFFER_BETA_START,
+            "rdc_replay_buffer_beta_frames": RDC_REPLAY_BUFFER_BETA_FRAMES,
             "rdc_action_values": RDC_ACTION_VALUES.__str__(),
             "rdc_features_per_community": RDC_FEATURES_PER_COMMUNITY,
+            "rdc_hidden_dim": RDC_HIDDEN_DIM,
+            "rdc_target_update_freq": RDC_TARGET_UPDATE_FREQ,
+            "rdc_tau": RDC_TAU,
+            "rdc_operator_rebalancing_cost": RDC_OPERATOR_REBALANCING_COST,
+            "rdc_reward_weight_demand": RDC_REWARD_WEIGHT_DEMAND,
+            "rdc_reward_weight_rebalancing": RDC_REWARD_WEIGHT_REBALANCING,
+            "rdc_reward_weight_gini": RDC_REWARD_WEIGHT_GINI,
         },
         {},
     )

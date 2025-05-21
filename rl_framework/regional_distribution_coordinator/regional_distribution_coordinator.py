@@ -27,7 +27,8 @@ class RegionalDistributionCoordinator:
         lr_step_size=1000,
         lr_gamma=0.5,
         replay_buffer_alpha=0.6,
-        replay_buffer_beta=0.4,
+        replay_buffer_beta_start=0.4,
+        replay_buffer_beta_frames=50_000,
     ):
         """
         RegionalDistributionCoordinator constructor.
@@ -68,7 +69,11 @@ class RegionalDistributionCoordinator:
 
         self.replay_buffer_capacity = replay_buffer_capacity
         self.replay_buffer_alpha = replay_buffer_alpha
-        self.replay_buffer_beta = replay_buffer_beta
+
+        self.replay_buffer_beta_start = replay_buffer_beta_start
+        self.replay_buffer_beta = replay_buffer_beta_start
+        self.replay_buffer_beta_frames = replay_buffer_beta_frames
+        self.replay_buffer_frames_idx = 0
 
         # self.replay_buffer = ReplayBuffer(capacity=self.replay_buffer_capacity)
         self.replay_buffer = ReplayBuffer(
@@ -151,6 +156,19 @@ class RegionalDistributionCoordinator:
         done: bool,
     ):
         self.replay_buffer.push(state, action_indices, reward, next_state, done)
+
+    def anneal_beta(self):
+        """
+        Linearly increase beta from beta_start → 1.0 over beta_frames steps.
+        After that, beta stays at 1.0.
+        """
+        fraction = min(
+            float(self.replay_buffer_frames_idx) / self.replay_buffer_beta_frames, 1.0
+        )
+        # beta moves from beta_start up to 1.0
+        self.beta = self.replay_buffer_beta_start + fraction * (
+            1.0 - self.replay_buffer_beta_start
+        )
 
     def train(self):
         if len(self.replay_buffer) < self.batch_size:  # not enough samples
