@@ -16,10 +16,11 @@ def main():
     # global parameters
     NUM_COMMUNITIES = 8
     COMMUNITY_ID = ""
-    NUM_ZONES = 273
+    N_TOTAL_ZONES = 273
     FLEET_SIZE = 400
-    NUM_EPISODES = 1
-    MAX_STEPS_PER_EPISODE = 100
+    N_EPOCHS = 10
+    MAX_STEPS_PER_EPISODE = 2048
+    TOTAL_TIME_STEPS = 250_000
     START_TIME = datetime(2025, 2, 11, 14, 0)
 
     # [grid_id, community_id]
@@ -50,23 +51,23 @@ def main():
     INCENTIVE_LEVELS = 5
 
     REWARD_WEIGHT_DEMAND = 1.0
-    REWARD_WEIGHT_REBALANCING = 0
-    REWARD_WEIGHT_GINI = 0
+    REWARD_WEIGHT_REBALANCING = 0.5
+    REWARD_WEIGHT_GINI = 0.25
 
     UIC_POLICY = "MLPPolicy"
-    UIC_LEARNING_RATE = 1e-5
+    UIC_LEARNING_RATE = 3e-4
     UIC_GAMMA = 0.99
     UIC_GAE_LAMBDA = 0.95
     UIC_CLIP_RANGE = 0.2
     UIC_ENT_COEF = 0.01
-    UIC_BATCH_SIZE = 128
+    UIC_BATCH_SIZE = 64
     UIC_VERBOSE = 1
     UIC_TENSORBOARD_LOG = "rl_framework/runs/"
 
     # --- INITIALIZE ENVIRONMENT ---
     dropoff_demand_forecaster = IrConvLstmDemandForecaster(
         num_communities=NUM_COMMUNITIES,
-        num_zones=NUM_ZONES,
+        num_zones=N_TOTAL_ZONES,
         zone_community_map=ZONE_COMMUNITY_MAP,
         model_path="/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/models/irregular_convolution_LSTM_37_1747222620_dropoff.pkl",
         demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
@@ -74,7 +75,7 @@ def main():
 
     pickup_demand_forecaster = IrConvLstmDemandForecaster(
         num_communities=NUM_COMMUNITIES,
-        num_zones=NUM_ZONES,
+        num_zones=N_TOTAL_ZONES,
         zone_community_map=ZONE_COMMUNITY_MAP,
         model_path="/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/models/irregular_convolution_LSTM_29_1747224180_pickup.pkl",
         demand_data_path=PICK_UP_DEMAND_DATA_PATH,
@@ -82,14 +83,14 @@ def main():
 
     dropoff_demand_provider = DemandProviderImpl(
         num_communities=NUM_COMMUNITIES,
-        num_zones=NUM_ZONES,
+        num_zones=N_TOTAL_ZONES,
         zone_community_map=ZONE_COMMUNITY_MAP,
         demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
     )
 
     pickup_demand_provider = DemandProviderImpl(
         num_communities=NUM_COMMUNITIES,
-        num_zones=NUM_ZONES,
+        num_zones=N_TOTAL_ZONES,
         zone_community_map=ZONE_COMMUNITY_MAP,
         demand_data_path=PICK_UP_DEMAND_DATA_PATH,
     )
@@ -123,7 +124,7 @@ def main():
         env=environment,
         learning_rate=UIC_LEARNING_RATE,
         n_steps=MAX_STEPS_PER_EPISODE,
-        n_epochs=NUM_EPISODES,
+        n_epochs=N_EPOCHS,
         batch_size=UIC_BATCH_SIZE,
         gamma=UIC_GAMMA,
         gae_lambda=UIC_GAE_LAMBDA,
@@ -134,7 +135,7 @@ def main():
     )
 
     agent.train(
-        total_timesteps=NUM_EPISODES * MAX_STEPS_PER_EPISODE,
+        total_timesteps=TOTAL_TIME_STEPS,
     )
 
     print("Training completed.")
