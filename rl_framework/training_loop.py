@@ -42,7 +42,6 @@ def main():
     RDC_BATCH_SIZE = 256
     RDC_HIDDEN_DIM = 128
 
-    RDC_TARGET_UPDATE_FREQ = 1000
     RDC_LR = 5e-6
     RDC_LR_STEP_SIZE = 1000
     RDC_LR_GAMMA = 0.5
@@ -137,7 +136,6 @@ def main():
         epsilon_decay=RDC_EPSILON_DECAY,
         batch_size=RDC_BATCH_SIZE,
         hidden_dim=RDC_HIDDEN_DIM,
-        target_update_freq=RDC_TARGET_UPDATE_FREQ,
         tau=RDC_TAU,
         device=device,
     )
@@ -168,7 +166,6 @@ def main():
             "rdc_action_values": RDC_ACTION_VALUES.__str__(),
             "rdc_features_per_community": RDC_FEATURES_PER_COMMUNITY,
             "rdc_hidden_dim": RDC_HIDDEN_DIM,
-            "rdc_target_update_freq": RDC_TARGET_UPDATE_FREQ,
             "rdc_tau": RDC_TAU,
             "rdc_operator_rebalancing_cost": RDC_OPERATOR_REBALANCING_COST,
             "rdc_reward_weight_demand": RDC_REWARD_WEIGHT_DEMAND,

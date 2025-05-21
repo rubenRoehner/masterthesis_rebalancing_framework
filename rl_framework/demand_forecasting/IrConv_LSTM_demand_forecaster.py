@@ -71,6 +71,14 @@ class IrConvLstmDemandForecaster(DemandForecaster):
 
         # Ensure demand_data index is DatetimeIndex
         self.demand_data.index = pd.to_datetime(self.demand_data.index)
+        self.demand_data.sort_index(inplace=True)
+        # Reindex to full hourly range, filling missing hours with zeros
+        full_idx = pd.date_range(
+            start=self.demand_data.index.min(),
+            end=self.demand_data.index.max(),
+            freq="h",
+        )
+        self.demand_data = self.demand_data.reindex(full_idx, fill_value=0)
         # Scale data
         # Reshape demand_data.values to (num_samples, num_nodes, 1) for scaling
         data_to_scale = self.demand_data.values[:, :, np.newaxis]

@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import numpy as np
 import pandas as pd
+from datetime import datetime, timedelta
 
 
 class DemandProvider(ABC):
@@ -14,6 +15,12 @@ class DemandProvider(ABC):
         self.num_communities = num_communities
         self.num_zones = num_zones
         self.zone_community_map = zone_community_map
+
+    @abstractmethod
+    def get_random_start_time(
+        self, max_steps: int, step_duration: timedelta
+    ) -> datetime:
+        pass
 
     @abstractmethod
     def get_demand_per_zone(self, time_of_day: int, day: int, month: int) -> np.ndarray:

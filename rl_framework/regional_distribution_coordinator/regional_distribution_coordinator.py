@@ -20,7 +20,6 @@ class RegionalDistributionCoordinator:
         epsilon_end=0.05,
         epsilon_decay=0.9995,
         batch_size=64,
-        target_update_freq=10,
         tau=0.005,
         hidden_dim=128,
         lr_step_size=1000,
@@ -62,7 +61,6 @@ class RegionalDistributionCoordinator:
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_end
         self.batch_size = batch_size
-        self.target_update_freq = target_update_freq
         self.tau = tau
         self.train_step_counter = 0
 
@@ -165,13 +163,18 @@ class RegionalDistributionCoordinator:
             float(self.replay_buffer_frames_idx) / self.replay_buffer_beta_frames, 1.0
         )
         # beta moves from beta_start up to 1.0
-        self.beta = self.replay_buffer_beta_start + fraction * (
+        self.replay_buffer_beta = self.replay_buffer_beta_start + fraction * (
             1.0 - self.replay_buffer_beta_start
         )
 
     def train(self):
         if len(self.replay_buffer) < self.batch_size:  # not enough samples
             return None
+
+        # Increase the replay buffer index
+        # This is used to compute the beta value for importance sampling
+        self.replay_buffer_frames_idx += 1
+        self.anneal_beta()
 
         # Sample a batch of experiences from the replay buffer
         experiences, indices, weights = self.replay_buffer.sample(
@@ -180,9 +183,6 @@ class RegionalDistributionCoordinator:
 
         if experiences is None:
             return None
-
-        self.replay_buffer_frames_idx += 1
-        self.anneal_beta()
 
         # exp.state is a 1D tensor [state_dim]. stack creates [batch_size, state_dim]
         state_batch = torch.stack([exp.state for exp in experiences]).to(self.device)
@@ -213,28 +213,34 @@ class RegionalDistributionCoordinator:
         with torch.no_grad():
             # Compute Q-values for the next states using the target network
             # target_network also returns a list of tensors
-            next_q_values_list = self.target_network(next_state_batch)
+            policy_next_q_values_list = self.policy_network(next_state_batch)
             # For each head, get the max Q-value for the next state. Each element is [batch_size]
-            next_max_q_values_per_head_list = [
-                next_q_values_list[i].max(1)[0] for i in range(self.num_communities)
+            policy_best_next_actions = [
+                q.argmax(dim=1) for q in policy_next_q_values_list
+            ]  # shape [batch_size]
+
+            target_next_q_values_list = self.target_network(next_state_batch)
+
+            evaluated_next_q_values_list = [
+                target_next_q_values_list[i]
+                .gather(1, policy_best_next_actions[i].unsqueeze(1))
+                .squeeze(1)
+                for i in range(self.num_communities)
             ]
-            # Stack them to get [batch_size, num_communities]
+
+            # Stack the evaluated Q-values for each head into a single tensor
             stacked_next_max_q_values = torch.stack(
-                next_max_q_values_per_head_list, dim=1
-            )
+                evaluated_next_q_values_list, dim=1
+            )  # [batch_size, num_communities]
 
-            # Compute the target Q-values: R + gamma * max_a' Q_target(s', a')
-            # reward_batch is [batch_size], done_batch is [batch_size]
-            # stacked_next_max_q_values is [batch_size, num_communities]
-            # Broadcasting reward_batch and done_batch for element-wise multiplication
+            # Compute the target Q-values
+            # target_q_values = reward + (1 - done) * gamma * max_a' Q(s', a')
             target_q_values = (
-                reward_batch.unsqueeze(1)  # [batch_size, 1]
-                + (1 - done_batch.unsqueeze(1))  # [batch_size, 1]
-                * self.gamma
-                * stacked_next_max_q_values  # [batch_size, num_communities]
-            )  # Result is [batch_size, num_communities]
+                reward_batch.unsqueeze(1)
+                + (1 - done_batch.unsqueeze(1)) * self.gamma * stacked_next_max_q_values
+            )  # [batch_size, num_communities]
 
-        # Compute TD errors for logging
+        # Compute TD errors for logging and update priorities
         td_per_head = torch.stack(
             [
                 (
@@ -264,18 +270,18 @@ class RegionalDistributionCoordinator:
                 for i in range(self.num_communities)
             ],
             dim=1,
-        )
+        )  # [batch_size, num_communities]
 
         # loss per sample => mean over heads/communities
         per_sample_losses = per_head_losses.mean(dim=1)  # [batch_size]
 
         # normalize weights for stabilizing
-        weights = torch.tensor(weights, dtype=per_head_losses.dtype, device=self.device)
-        weights = weights / weights.max()
+        weights = torch.as_tensor(
+            weights, dtype=per_head_losses.dtype, device=self.device
+        )  # [batch_size]
+        weights = weights / weights.max()  # [batch_size]
 
-        weighted_loss = (per_sample_losses * weights).mean()  # [batch_size]
-
-        loss = weighted_loss.mean()
+        loss = (per_sample_losses * weights).mean()
 
         # Backpropagation
         self.optimizer.zero_grad()

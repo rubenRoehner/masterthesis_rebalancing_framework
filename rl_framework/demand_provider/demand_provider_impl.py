@@ -1,7 +1,7 @@
 from demand_provider.demand_provider import DemandProvider
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 class DemandProviderImpl(DemandProvider):
@@ -22,6 +22,26 @@ class DemandProviderImpl(DemandProvider):
 
         # Ensure demand_data index is DatetimeIndex
         self.demand_data.index = pd.to_datetime(self.demand_data.index)
+        self.demand_data.sort_index(inplace=True)
+        # Reindex to full hourly range, filling missing hours with zeros
+        full_idx = pd.date_range(
+            start=self.demand_data.index.min(),
+            end=self.demand_data.index.max(),
+            freq="h",
+        )
+        self.demand_data = self.demand_data.reindex(full_idx, fill_value=0)
+
+    def get_random_start_time(
+        self, max_steps: int, step_duration: timedelta
+    ) -> datetime:
+        """
+        Returns a random datetime from the demand_data index such that
+        (start_time + step_duration * max_steps) <= last timestamp.
+        """
+        idxs = self.demand_data.index
+        max_delta = step_duration * max_steps
+        valid = idxs[idxs + max_delta <= idxs[-1]]
+        return valid[np.random.randint(len(valid))]
 
     def get_demand_per_zone(self, time_of_day: int, day: int, month: int) -> np.ndarray:
         """

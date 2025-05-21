@@ -284,6 +284,9 @@ class EscooterRDCEnv(gym.Env):
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed, options=options)
 
+        self.start_time = self.pickup_demand_provider.get_random_start_time(
+            max_steps=self.max_steps, step_duration=self.step_duration
+        )
         self.current_step = 0
         self.initialize_vehicle_counts()
         self.generate_demand_forecast(current_time=self.start_time)
