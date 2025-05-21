@@ -35,6 +35,9 @@ def main():
     )
 
     RDC_REPLAY_BUFFER_CAPACITY = 10000
+    RDC_REPLAY_BUFFER_ALPHA = 0.6
+    RDC_REPLAY_BUFFER_BETA = 0.4
+
     RDC_BATCH_SIZE = 256
     RDC_HIDDEN_DIM = 128
 
@@ -121,6 +124,8 @@ def main():
         num_communities=NUM_COMMUNITIES,
         action_values=RDC_ACTION_VALUES,
         replay_buffer_capacity=RDC_REPLAY_BUFFER_CAPACITY,
+        replay_buffer_alpha=RDC_REPLAY_BUFFER_ALPHA,
+        replay_buffer_beta=RDC_REPLAY_BUFFER_BETA,
         learning_rate=RDC_LR,
         lr_step_size=RDC_LR_STEP_SIZE,
         lr_gamma=RDC_LR_GAMMA,

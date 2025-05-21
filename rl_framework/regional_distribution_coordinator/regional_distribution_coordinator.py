@@ -1,6 +1,7 @@
 from regional_distribution_coordinator.multi_head_dqn import MultiHeadDQN
 from regional_distribution_coordinator.replay_buffer import ReplayBuffer
 import torch
+import numpy as np
 from typing import List
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import StepLR
@@ -25,6 +26,8 @@ class RegionalDistributionCoordinator:
         hidden_dim=128,
         lr_step_size=1000,
         lr_gamma=0.5,
+        replay_buffer_alpha=0.6,
+        replay_buffer_beta=0.4,
     ):
         """
         RegionalDistributionCoordinator constructor.
@@ -64,9 +67,15 @@ class RegionalDistributionCoordinator:
         self.train_step_counter = 0
 
         self.replay_buffer_capacity = replay_buffer_capacity
-        self.learning_rate = learning_rate
+        self.replay_buffer_alpha = replay_buffer_alpha
+        self.replay_buffer_beta = replay_buffer_beta
 
-        self.replay_buffer = ReplayBuffer(capacity=self.replay_buffer_capacity)
+        # self.replay_buffer = ReplayBuffer(capacity=self.replay_buffer_capacity)
+        self.replay_buffer = ReplayBuffer(
+            capacity=self.replay_buffer_capacity, alpha=self.replay_buffer_alpha
+        )
+
+        self.learning_rate = learning_rate
         self.optimizer = torch.optim.Adam(
             self.policy_network.parameters(), lr=self.learning_rate
         )
@@ -148,7 +157,12 @@ class RegionalDistributionCoordinator:
             return None
 
         # Sample a batch of experiences from the replay buffer
-        experiences = self.replay_buffer.sample(self.batch_size)
+        experiences, indices, weights = self.replay_buffer.sample(
+            self.batch_size, self.replay_buffer_beta
+        )
+
+        if experiences is None:
+            return None
 
         # exp.state is a 1D tensor [state_dim]. stack creates [batch_size, state_dim]
         state_batch = torch.stack([exp.state for exp in experiences]).to(self.device)
@@ -201,11 +215,20 @@ class RegionalDistributionCoordinator:
             )  # Result is [batch_size, num_communities]
 
         # Compute TD errors for logging
-        td_errors_per_head = [
-            (target_q_values[:, i].unsqueeze(1) - current_q_values_selected_list[i])
-            for i in range(self.num_communities)
-        ]
-        td_errors = torch.cat(td_errors_per_head, dim=1).detach()
+        td_per_head = torch.stack(
+            [
+                (target_q_values[:, i] - current_q_values_selected_list[i])
+                .abs()
+                .squeeze(1)
+                for i in range(self.num_communities)
+            ],
+            dim=1,
+        )  # [batch_size, num_communities]
+
+        td_for_priorities = td_per_head.max(dim=1)[0]  # [batch_size]
+        td_for_priorities_np = np.squeeze(td_for_priorities.detach().cpu().numpy())
+
+        self.replay_buffer.update_priorities(indices, td_for_priorities_np)
 
         # Compute the loss
         # Used huber loss for stability. MSE yielded unstable training.
@@ -217,7 +240,11 @@ class RegionalDistributionCoordinator:
             )
             for i in range(self.num_communities)
         ]
-        loss = torch.stack(per_head_losses).to(self.device).mean()
+        per_head_losses = torch.stack(per_head_losses).to(self.device).mean()
+
+        weighted_loss = per_head_losses * weights
+
+        loss = weighted_loss.mean()
 
         # Backpropagation
         self.optimizer.zero_grad()
@@ -236,4 +263,4 @@ class RegionalDistributionCoordinator:
         # Update epsilon
         self.update_epsilon()
 
-        return loss.item(), td_errors
+        return loss.item(), td_per_head.detach()
