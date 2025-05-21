@@ -1,7 +1,6 @@
 from regional_distribution_coordinator.multi_head_dqn import MultiHeadDQN
 from regional_distribution_coordinator.replay_buffer import ReplayBuffer
 import torch
-import numpy as np
 from typing import List
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import StepLR
@@ -182,6 +181,9 @@ class RegionalDistributionCoordinator:
         if experiences is None:
             return None
 
+        self.replay_buffer_frames_idx += 1
+        self.anneal_beta()
+
         # exp.state is a 1D tensor [state_dim]. stack creates [batch_size, state_dim]
         state_batch = torch.stack([exp.state for exp in experiences]).to(self.device)
         action_indice_batch = torch.tensor(
@@ -235,32 +237,43 @@ class RegionalDistributionCoordinator:
         # Compute TD errors for logging
         td_per_head = torch.stack(
             [
-                (target_q_values[:, i] - current_q_values_selected_list[i])
-                .abs()
-                .squeeze(1)
+                (
+                    target_q_values[:, i].unsqueeze(1)
+                    - current_q_values_selected_list[i]
+                ).abs()
                 for i in range(self.num_communities)
             ],
             dim=1,
         )  # [batch_size, num_communities]
 
-        td_for_priorities = td_per_head.max(dim=1)[0]  # [batch_size]
-        td_for_priorities_np = np.squeeze(td_for_priorities.detach().cpu().numpy())
+        td_for_priorities = (
+            td_per_head.max(dim=1)[0].detach().cpu().numpy()
+        )  # [batch_size]
 
-        self.replay_buffer.update_priorities(indices, td_for_priorities_np)
+        self.replay_buffer.update_priorities(indices, td_for_priorities)
 
         # Compute the loss
         # Used huber loss for stability. MSE yielded unstable training.
-        per_head_losses = [
-            F.huber_loss(
-                current_q_values_selected_list[i],
-                target_q_values[:, i].unsqueeze(1),
-                reduction="mean",
-            )
-            for i in range(self.num_communities)
-        ]
-        per_head_losses = torch.stack(per_head_losses).to(self.device).mean()
+        per_head_losses = torch.stack(
+            [
+                F.huber_loss(
+                    current_q_values_selected_list[i],
+                    target_q_values[:, i].unsqueeze(1),
+                    reduction="none",
+                )
+                for i in range(self.num_communities)
+            ],
+            dim=1,
+        )
 
-        weighted_loss = per_head_losses * weights
+        # loss per sample => mean over heads/communities
+        per_sample_losses = per_head_losses.mean(dim=1)  # [batch_size]
+
+        # normalize weights for stabilizing
+        weights = torch.tensor(weights, dtype=per_head_losses.dtype, device=self.device)
+        weights = weights / weights.max()
+
+        weighted_loss = (per_sample_losses * weights).mean()  # [batch_size]
 
         loss = weighted_loss.mean()
 
