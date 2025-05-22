@@ -6,38 +6,59 @@ from demand_forecasting.IrConv_LSTM_demand_forecaster import (
     IrConvLstmDemandForecaster,
 )
 from demand_provider.demand_provider_impl import DemandProviderImpl
-from rl_framework.user_incentive_coordinator.escooter_uic_env import EscooterUICEnv
-from rl_framework.user_incentive_coordinator.user_incentive_coordinator import (
+from user_incentive_coordinator.escooter_uic_env import EscooterUICEnv
+from user_incentive_coordinator.user_incentive_coordinator import (
     UserIncentiveCoordinator,
 )
+
+from stable_baselines3.common.vec_env import (
+    VecNormalize,
+    DummyVecEnv,
+)
+from stable_baselines3.common.monitor import Monitor
 
 
 def main():
     # global parameters
     NUM_COMMUNITIES = 8
-    COMMUNITY_ID = ""
+    COMMUNITY_ID = "861faa71fffffff"
     N_TOTAL_ZONES = 273
     FLEET_SIZE = 400
-    N_EPOCHS = 10
-    MAX_STEPS_PER_EPISODE = 2048
-    TOTAL_TIME_STEPS = 250_000
+    N_EPOCHS = 20
+    MAX_STEPS_PER_EPISODE = 256
+    TOTAL_TIME_STEPS = 200_000
     START_TIME = datetime(2025, 2, 11, 14, 0)
 
-    # [grid_id, community_id]
+    # [grid_index, community_id]
     ZONE_COMMUNITY_MAP: pd.DataFrame = pd.read_pickle(
         "/home/ruroit00/rebalancing_framework/processed_data/grid_community_map.pickle"
     )
 
-    ZONE_NEIGHBOR_MAP: dict[int, list[int]] = {}
     ZONE_INDEX_MAP: dict[str, int] = {}
     for i, row in ZONE_COMMUNITY_MAP[
-        ZONE_COMMUNITY_MAP["community_id"] == COMMUNITY_ID
+        ZONE_COMMUNITY_MAP["community_index"] == COMMUNITY_ID
     ].iterrows():
-        ZONE_INDEX_MAP.update({row["grid_id"]: i})
+        ZONE_INDEX_MAP.update({row["grid_index"]: i})
+
+    COMMUNTIY_ZONE_IDS = set(ZONE_INDEX_MAP.keys())
+
+    ZONE_NEIGHBOR_MAP_DF: pd.DataFrame = pd.read_pickle(
+        "/home/ruroit00/rebalancing_framework/processed_data/grid_cells_neighbors_list.pickle"
+    )  # [zone_index, list of neighbors]
+
+    ZONE_NEIGHBOR_MAP: dict[str, list[str]] = {}
+    for i, row in ZONE_NEIGHBOR_MAP_DF.iterrows():
+        if row["grid_index"] not in COMMUNTIY_ZONE_IDS:
+            continue
+        # Filter neighbors to only include those in the same community
+        neighbors = [
+            neighbor for neighbor in row["neighbors"] if neighbor in COMMUNTIY_ZONE_IDS
+        ]
+        ZONE_NEIGHBOR_MAP.update({row["grid_index"]: neighbors})
 
     # Calculate the number of zones fore community COMMUNITY_ID
     N_ZONES = ZONE_COMMUNITY_MAP[
-        ZONE_COMMUNITY_MAP["community_id"] == COMMUNITY_ID
+        ZONE_COMMUNITY_MAP["community_index"] == COMMUNITY_ID
     ].shape[0]
 
     DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
@@ -54,13 +75,14 @@ def main():
     REWARD_WEIGHT_REBALANCING = 0.5
     REWARD_WEIGHT_GINI = 0.25
 
-    UIC_POLICY = "MLPPolicy"
+    UIC_POLICY = "MultiInputPolicy"
+    UIC_N_STEPS = 256
     UIC_LEARNING_RATE = 3e-4
     UIC_GAMMA = 0.99
     UIC_GAE_LAMBDA = 0.95
     UIC_CLIP_RANGE = 0.2
     UIC_ENT_COEF = 0.01
-    UIC_BATCH_SIZE = 64
+    UIC_BATCH_SIZE = 32
     UIC_VERBOSE = 1
     UIC_TENSORBOARD_LOG = "rl_framework/runs/"
 
@@ -97,7 +119,7 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    environment = EscooterUICEnv(
+    escooter_env = EscooterUICEnv(
         community_id=COMMUNITY_ID,
         n_zones=N_ZONES,
         fleet_size=FLEET_SIZE,
@@ -119,11 +141,14 @@ def main():
         reward_weight_gini=REWARD_WEIGHT_GINI,
     )
 
+    env = DummyVecEnv([lambda: Monitor(escooter_env)])
+    env = VecNormalize(env, norm_obs=True, norm_reward=False)
+
     agent = UserIncentiveCoordinator(
         policy=UIC_POLICY,
-        env=environment,
+        env=env,
         learning_rate=UIC_LEARNING_RATE,
-        n_steps=MAX_STEPS_PER_EPISODE,
+        n_steps=UIC_N_STEPS,
         n_epochs=N_EPOCHS,
         batch_size=UIC_BATCH_SIZE,
         gamma=UIC_GAMMA,

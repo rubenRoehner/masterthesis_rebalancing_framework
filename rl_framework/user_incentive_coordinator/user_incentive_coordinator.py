@@ -1,13 +1,14 @@
 from stable_baselines3 import PPO
 from stable_baselines3.common.policies import ActorCriticPolicy
-import gymnasium as gym
+import torch.nn as nn
+from stable_baselines3.common.vec_env import VecEnv
 
 
 class UserIncentiveCoordinator:
     def __init__(
         self,
         policy: str | type[ActorCriticPolicy],
-        env: gym.Env,
+        env: VecEnv,
         learning_rate: float,
         n_steps: int,
         batch_size: int,
@@ -20,8 +21,8 @@ class UserIncentiveCoordinator:
         tensorboard_log: str,
     ):
         policy_kwargs = {
-            "net_arch": [dict(pi=[64, 64], vf=[64, 64])],
-            "activation_fn": "relu",
+            "net_arch": dict(pi=[64, 64], vf=[64, 64]),
+            "activation_fn": nn.ReLU,
         }
         self.tensorboard_log = tensorboard_log
         self.model = PPO(

@@ -96,14 +96,11 @@ class DemandProviderImpl(DemandProvider):
         demand_data_filtered = self.demand_data.loc[dt]
 
         # Filter demand data for the specified community
-        community_demand = demand_data_filtered[
-            self.zone_community_map["community_index"] == community_id
-        ]
+        community_mask = self.zone_community_map["community_index"] == community_id
+        zone_ids = self.zone_community_map.loc[community_mask, "grid_index"].tolist()
 
-        # sort columns
-        community_demand = community_demand.reindex(
-            sorted(community_demand.columns),
-        )
+        community_demand = demand_data_filtered.loc[zone_ids]
 
-        # Return demand per zone as a numpy array
+        community_demand = community_demand.reindex(sorted(zone_ids))
+
         return community_demand.to_numpy()

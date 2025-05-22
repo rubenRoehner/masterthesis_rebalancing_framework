@@ -15,6 +15,7 @@ class DemandProvider(ABC):
         self.num_communities = num_communities
         self.num_zones = num_zones
         self.zone_community_map = zone_community_map
+        self.demand_data: pd.DataFrame = pd.DataFrame()
 
     @abstractmethod
     def get_random_start_time(
