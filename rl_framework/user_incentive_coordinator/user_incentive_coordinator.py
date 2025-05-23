@@ -41,8 +41,8 @@ class UserIncentiveCoordinator:
             policy_kwargs=policy_kwargs,
         )
 
-    def train(self, total_timesteps: int) -> PPO:
-        model = self.model.learn(total_timesteps=total_timesteps)
+    def train(self, total_timesteps: int, callback: MaybeCallback) -> PPO:
+        model = self.model.learn(total_timesteps=total_timesteps, callback=callback)
         self.model.save(self.tensorboard_log + "/outputs/user_incentive_coordinator")
         print("Model saved as user_incentive_coordinator")
         print("Training complete.")

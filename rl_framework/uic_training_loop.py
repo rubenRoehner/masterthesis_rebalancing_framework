@@ -16,6 +16,7 @@ from stable_baselines3.common.vec_env import (
     DummyVecEnv,
 )
 from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.callbacks import EvalCallback
 
 
 def main():
@@ -144,6 +145,17 @@ def main():
     env = DummyVecEnv([lambda: Monitor(escooter_env)])
     env = VecNormalize(env, norm_obs=True, norm_reward=False)
 
+    eval_env = DummyVecEnv([lambda: Monitor(escooter_env)])
+    # eval_env VecNormalize.load("normalize.pkl", eval_env)
+
+    eval_callback = EvalCallback(
+        eval_env=eval_env,
+        best_model_save_path=UIC_TENSORBOARD_LOG
+        + "/outputs/user_incentive_coordinator/",
+        log_path=UIC_TENSORBOARD_LOG + "/outputs/user_incentive_coordinator/eval_logs/",
+        eval_freq=10_000,
+    )
+
     agent = UserIncentiveCoordinator(
         policy=UIC_POLICY,
         env=env,
@@ -161,6 +173,21 @@ def main():
 
     agent.train(
         total_timesteps=TOTAL_TIME_STEPS,
+        callback=eval_callback,
+    )
+
+    env.save(
+        UIC_TENSORBOARD_LOG
+        + "/outputs/user_incentive_coordinator/"
+        + COMMUNITY_ID
+        + "_env_train_normalize.pkl"
+    )
+
+    agent.model.save(
+        UIC_TENSORBOARD_LOG
+        + "/outputs/user_incentive_coordinator/"
+        + COMMUNITY_ID
+        + "_user_incentive_coordinator"
     )
 
     print("Training completed.")
