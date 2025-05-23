@@ -2,6 +2,8 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.policies import ActorCriticPolicy
 import torch.nn as nn
 from stable_baselines3.common.vec_env import VecEnv
+from stable_baselines3.common.type_aliases import MaybeCallback
+from stable_baselines3.common.utils import get_schedule_fn
 
 
 class UserIncentiveCoordinator:
@@ -25,10 +27,11 @@ class UserIncentiveCoordinator:
             "activation_fn": nn.ReLU,
         }
         self.tensorboard_log = tensorboard_log
+
         self.model = PPO(
             policy=policy,
             env=env,
-            learning_rate=learning_rate,
+            learning_rate=get_schedule_fn(learning_rate),
             n_steps=n_steps,
             batch_size=batch_size,
             n_epochs=n_epochs,
