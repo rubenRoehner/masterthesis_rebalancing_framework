@@ -1,34 +1,102 @@
 from datetime import datetime, timedelta
 import torch
 import pandas as pd
+import gymnasium as gym
+
 
 from demand_forecasting.IrConv_LSTM_demand_forecaster import (
     IrConvLstmDemandForecaster,
 )
+from demand_forecasting.demand_forecaster import DemandForecaster
 from demand_provider.demand_provider_impl import DemandProviderImpl
+from demand_provider.demand_provider import DemandProvider
 from user_incentive_coordinator.escooter_uic_env import EscooterUICEnv
 from user_incentive_coordinator.user_incentive_coordinator import (
     UserIncentiveCoordinator,
 )
 
-from stable_baselines3.common.vec_env import (
-    VecNormalize,
-    DummyVecEnv,
-)
+from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv, SubprocVecEnv
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import EvalCallback
 
+# global parameters
+NUM_COMMUNITIES = 8
+COMMUNITY_ID = "861faa71fffffff"
+N_TOTAL_ZONES = 273
+FLEET_SIZE = 400
+N_EPOCHS = 20
+MAX_STEPS_PER_EPISODE = 256
+TOTAL_TIME_STEPS = 200_000
+START_TIME = datetime(2025, 2, 11, 14, 0)
+
+N_WORKERS = 4
+BASE_SEED = 42
+
+# UIC parameters
+UIC_STEP_DURATION = 60  # in minutes
+
+USER_WILLINGNESS = [0.0, 0.05, 0.1, 0.15, 0.3]
+MAX_INCENTIVE = 5.0
+INCENTIVE_LEVELS = 5
+
+REWARD_WEIGHT_DEMAND = 1.0
+REWARD_WEIGHT_REBALANCING = 0.5
+REWARD_WEIGHT_GINI = 0.25
+
+UIC_POLICY = "MultiInputPolicy"
+UIC_N_STEPS = 256
+UIC_LEARNING_RATE = 3e-4
+UIC_GAMMA = 0.99
+UIC_GAE_LAMBDA = 0.95
+UIC_CLIP_RANGE = 0.2
+UIC_ENT_COEF = 0.01
+UIC_BATCH_SIZE = 32
+UIC_VERBOSE = 1
+UIC_TENSORBOARD_LOG = "rl_framework/runs/"
+
+
+def make_env(
+    rank: int,
+    n_zones: int,
+    dropoff_demand_forecaster: DemandForecaster,
+    pickup_demand_forecaster: DemandForecaster,
+    dropoff_demand_provider: DemandProvider,
+    pickup_demand_provider: DemandProvider,
+    device: torch.device,
+    zone_neighbor_map: dict[str, list[str]],
+    zone_index_map: dict[str, int],
+    seed: int = 0,
+):
+    def _init():
+        env: gym.Env = EscooterUICEnv(
+            community_id=COMMUNITY_ID,
+            n_zones=n_zones,
+            fleet_size=FLEET_SIZE,
+            dropoff_demand_forecaster=dropoff_demand_forecaster,
+            pickup_demand_forecaster=pickup_demand_forecaster,
+            dropoff_demand_provider=dropoff_demand_provider,
+            pickup_demand_provider=pickup_demand_provider,
+            device=device,
+            zone_neighbor_map=zone_neighbor_map,
+            zone_index_map=zone_index_map,
+            user_willingness=USER_WILLINGNESS,
+            max_incentive=MAX_INCENTIVE,
+            incentive_levels=INCENTIVE_LEVELS,
+            max_steps=MAX_STEPS_PER_EPISODE,
+            start_time=START_TIME + timedelta(minutes=rank * UIC_STEP_DURATION),
+            step_duration=timedelta(minutes=UIC_STEP_DURATION),
+            reward_weight_demand=REWARD_WEIGHT_DEMAND,
+            reward_weight_rebalancing=REWARD_WEIGHT_REBALANCING,
+            reward_weight_gini=REWARD_WEIGHT_GINI,
+        )
+        env.reset(seed=seed + rank)
+        env = Monitor(env)
+        return env
+
+    return _init
+
 
 def main():
-    # global parameters
-    NUM_COMMUNITIES = 8
-    COMMUNITY_ID = "861faa71fffffff"
-    N_TOTAL_ZONES = 273
-    FLEET_SIZE = 400
-    N_EPOCHS = 20
-    MAX_STEPS_PER_EPISODE = 256
-    TOTAL_TIME_STEPS = 200_000
-    START_TIME = datetime(2025, 2, 11, 14, 0)
 
     # [grid_index, community_id]
     ZONE_COMMUNITY_MAP: pd.DataFrame = pd.read_pickle(
@@ -64,28 +132,6 @@ def main():
 
     DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
     PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
-
-    # UIC parameters
-    UIC_STEP_DURATION = 60  # in minutes
-
-    USER_WILLINGNESS = [0.0, 0.05, 0.1, 0.15, 0.3]
-    MAX_INCENTIVE = 5.0
-    INCENTIVE_LEVELS = 5
-
-    REWARD_WEIGHT_DEMAND = 1.0
-    REWARD_WEIGHT_REBALANCING = 0.5
-    REWARD_WEIGHT_GINI = 0.25
-
-    UIC_POLICY = "MultiInputPolicy"
-    UIC_N_STEPS = 256
-    UIC_LEARNING_RATE = 3e-4
-    UIC_GAMMA = 0.99
-    UIC_GAE_LAMBDA = 0.95
-    UIC_CLIP_RANGE = 0.2
-    UIC_ENT_COEF = 0.01
-    UIC_BATCH_SIZE = 32
-    UIC_VERBOSE = 1
-    UIC_TENSORBOARD_LOG = "rl_framework/runs/"
 
     # --- INITIALIZE ENVIRONMENT ---
     dropoff_demand_forecaster = IrConvLstmDemandForecaster(
@@ -141,6 +187,25 @@ def main():
         reward_weight_rebalancing=REWARD_WEIGHT_REBALANCING,
         reward_weight_gini=REWARD_WEIGHT_GINI,
     )
+
+    train_envs = SubprocVecEnv(
+        [
+            make_env(
+                rank=i,
+                n_zones=N_ZONES,
+                dropoff_demand_forecaster=dropoff_demand_forecaster,
+                pickup_demand_forecaster=pickup_demand_forecaster,
+                dropoff_demand_provider=dropoff_demand_provider,
+                pickup_demand_provider=pickup_demand_provider,
+                device=device,
+                zone_neighbor_map=ZONE_NEIGHBOR_MAP,
+                zone_index_map=ZONE_INDEX_MAP,
+                seed=BASE_SEED,
+            )
+            for i in range(N_WORKERS)
+        ]
+    )
+    train_envs = VecNormalize(train_envs, norm_obs=True, norm_reward=False)
 
     env = DummyVecEnv([lambda: Monitor(escooter_env)])
     env = VecNormalize(env, norm_obs=True, norm_reward=False)
