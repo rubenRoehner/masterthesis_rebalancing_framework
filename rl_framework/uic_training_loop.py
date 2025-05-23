@@ -29,7 +29,7 @@ MAX_STEPS_PER_EPISODE = 256
 TOTAL_TIME_STEPS = 200_000
 START_TIME = datetime(2025, 2, 11, 14, 0)
 
-N_WORKERS = 4
+N_WORKERS = 8
 BASE_SEED = 42
 
 # UIC parameters
@@ -206,12 +206,10 @@ def main():
         ]
     )
     train_envs = VecNormalize(train_envs, norm_obs=True, norm_reward=False)
-
-    env = DummyVecEnv([lambda: Monitor(escooter_env)])
-    env = VecNormalize(env, norm_obs=True, norm_reward=False)
+    train_envs.save("normalize.pkl")
 
     eval_env = DummyVecEnv([lambda: Monitor(escooter_env)])
-    # eval_env VecNormalize.load("normalize.pkl", eval_env)
+    eval_env = VecNormalize.load("normalize.pkl", eval_env)
 
     eval_callback = EvalCallback(
         eval_env=eval_env,
@@ -223,7 +221,7 @@ def main():
 
     agent = UserIncentiveCoordinator(
         policy=UIC_POLICY,
-        env=env,
+        env=train_envs,
         learning_rate=UIC_LEARNING_RATE,
         n_steps=UIC_N_STEPS,
         n_epochs=N_EPOCHS,
@@ -241,7 +239,7 @@ def main():
         callback=eval_callback,
     )
 
-    env.save(
+    train_envs.save(
         UIC_TENSORBOARD_LOG
         + "/outputs/user_incentive_coordinator/"
         + COMMUNITY_ID

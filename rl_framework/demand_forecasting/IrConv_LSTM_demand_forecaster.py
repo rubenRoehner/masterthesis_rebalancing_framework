@@ -217,7 +217,10 @@ class IrConvLstmDemandForecaster(DemandForecaster):
         use_cuda = torch.cuda.is_available()
         device = torch.device("cuda" if use_cuda else "cpu")
 
-        # Convert numpy arrays to PyTorch tensors
+        for module in self.model.modules():
+            if isinstance(module, torch.nn.modules.rnn.LSTM):
+                module.flatten_parameters()
+
         closeness_tensor = Variable(
             torch.FloatTensor(closeness_data_np).unsqueeze(0)
         ).to(device)
@@ -228,15 +231,12 @@ class IrConvLstmDemandForecaster(DemandForecaster):
             device
         )
 
-        with torch.no_grad():  # Disable gradient calculations for inference
+        with torch.no_grad():
             prediction_tensor = self.model(
                 closeness_tensor, period_tensor, trend_tensor
             )
 
-        # Squeeze to get (num_nodes,) for a single prediction item
-        prediction_np = prediction_tensor.squeeze().cpu().numpy()
-
-        return prediction_np
+        return prediction_tensor.squeeze().cpu().numpy()
 
     def get_closeness_data(self, time_of_day: int, day: int, month: int) -> np.ndarray:
         """
