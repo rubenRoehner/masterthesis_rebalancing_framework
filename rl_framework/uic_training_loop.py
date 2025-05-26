@@ -205,7 +205,7 @@ def main():
             for i in range(N_WORKERS)
         ]
     )
-    train_envs = VecNormalize(train_envs, norm_obs=True, norm_reward=False)
+    train_envs = VecNormalize(train_envs)
     train_envs.save("normalize.pkl")
 
     eval_env = DummyVecEnv([lambda: Monitor(escooter_env)])
@@ -216,7 +216,7 @@ def main():
         best_model_save_path=UIC_TENSORBOARD_LOG
         + "/outputs/user_incentive_coordinator/",
         log_path=UIC_TENSORBOARD_LOG + "/outputs/user_incentive_coordinator/eval_logs/",
-        eval_freq=10_000,
+        eval_freq=1000,
     )
 
     agent = UserIncentiveCoordinator(
