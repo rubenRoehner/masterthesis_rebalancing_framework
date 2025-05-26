@@ -16,10 +16,8 @@ from demand_provider.demand_provider_impl import DemandProviderImpl
 
 def main():
     # global parameters
-    NUM_COMMUNITIES = 8
-    NUM_ZONES = 273
     FLEET_SIZE = 1000
-    NUM_EPISODES = 1000
+    NUM_EPISODES = 200
     MAX_STEPS_PER_EPISODE = 100
     START_TIME = datetime(2025, 2, 11, 14, 0)
 
@@ -27,6 +25,20 @@ def main():
     ZONE_COMMUNITY_MAP: pd.DataFrame = pd.read_pickle(
         "/home/ruroit00/rebalancing_framework/processed_data/grid_community_map.pickle"
     )
+
+    N_COMMUNITIES = ZONE_COMMUNITY_MAP["community_index"].nunique()
+    N_ZONES = ZONE_COMMUNITY_MAP.shape[0]
+
+    COMMUNITY_INDEX_MAP: dict[str, int] = {}
+    for index, value in enumerate(
+        sorted(ZONE_COMMUNITY_MAP["community_index"].unique())
+    ):
+        COMMUNITY_INDEX_MAP.update({value: index})
+    print(f"Community Index Map: {COMMUNITY_INDEX_MAP}")
+
+    ZONE_INDEX_MAP: dict[str, int] = {}
+    for i, row in ZONE_COMMUNITY_MAP.iterrows():
+        ZONE_INDEX_MAP.update({row["grid_index"]: i})
 
     # RegionalDistributionCoordinator parameters
     RDC_ACTION_VALUES = [-15, -10, -5, 0, 5, 10, 15]
@@ -69,31 +81,31 @@ def main():
 
     # --- INITIALIZE ENVIRONMENT ---
     dropoff_demand_forecaster = IrConvLstmDemandForecaster(
-        num_communities=NUM_COMMUNITIES,
-        num_zones=NUM_ZONES,
+        num_communities=N_COMMUNITIES,
+        num_zones=N_ZONES,
         zone_community_map=ZONE_COMMUNITY_MAP,
-        model_path="/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/models/irregular_convolution_LSTM_37_1747222620_dropoff.pkl",
+        model_path="/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/models/irregular_convolution_LSTM_dropoff.pkl",
         demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
     )
 
     pickup_demand_forecaster = IrConvLstmDemandForecaster(
-        num_communities=NUM_COMMUNITIES,
-        num_zones=NUM_ZONES,
+        num_communities=N_COMMUNITIES,
+        num_zones=N_ZONES,
         zone_community_map=ZONE_COMMUNITY_MAP,
-        model_path="/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/models/irregular_convolution_LSTM_29_1747224180_pickup.pkl",
+        model_path="/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/models/irregular_convolution_LSTM_pickup.pkl",
         demand_data_path=PICK_UP_DEMAND_DATA_PATH,
     )
 
     dropoff_demand_provider = DemandProviderImpl(
-        num_communities=NUM_COMMUNITIES,
-        num_zones=NUM_ZONES,
+        num_communities=N_COMMUNITIES,
+        num_zones=N_ZONES,
         zone_community_map=ZONE_COMMUNITY_MAP,
         demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
     )
 
     pickup_demand_provider = DemandProviderImpl(
-        num_communities=NUM_COMMUNITIES,
-        num_zones=NUM_ZONES,
+        num_communities=N_COMMUNITIES,
+        num_zones=N_ZONES,
         zone_community_map=ZONE_COMMUNITY_MAP,
         demand_data_path=PICK_UP_DEMAND_DATA_PATH,
     )
@@ -101,8 +113,8 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     rdc_env = EscooterRDCEnv(
-        num_communities=NUM_COMMUNITIES,
-        features_per_community=RDC_FEATURES_PER_COMMUNITY,
+        num_communities=N_COMMUNITIES,
+        n_zones=N_ZONES,
         action_values=RDC_ACTION_VALUES,
         max_steps=MAX_STEPS_PER_EPISODE,
         step_duration=timedelta(minutes=RDC_STEP_DURATION),
@@ -111,6 +123,9 @@ def main():
         reward_weight_demand=RDC_REWARD_WEIGHT_DEMAND,
         reward_weight_rebalancing=RDC_REWARD_WEIGHT_REBALANCING,
         reward_weight_gini=RDC_REWARD_WEIGHT_GINI,
+        zone_community_map=ZONE_COMMUNITY_MAP,
+        zone_index_map=ZONE_INDEX_MAP,
+        community_index_map=COMMUNITY_INDEX_MAP,
         dropoff_demand_forecaster=dropoff_demand_forecaster,
         pickup_demand_forecaster=pickup_demand_forecaster,
         dropoff_demand_provider=dropoff_demand_provider,
@@ -120,8 +135,8 @@ def main():
     )
 
     rdc_agent = RegionalDistributionCoordinator(
-        state_dim=NUM_COMMUNITIES * RDC_FEATURES_PER_COMMUNITY,
-        num_communities=NUM_COMMUNITIES,
+        state_dim=N_COMMUNITIES * RDC_FEATURES_PER_COMMUNITY,
+        num_communities=N_COMMUNITIES,
         action_values=RDC_ACTION_VALUES,
         replay_buffer_capacity=RDC_REPLAY_BUFFER_CAPACITY,
         replay_buffer_alpha=RDC_REPLAY_BUFFER_ALPHA,
@@ -147,7 +162,7 @@ def main():
 
     writer.add_hparams(
         {
-            "num_communities": NUM_COMMUNITIES,
+            "num_communities": N_COMMUNITIES,
             "num_episodes": NUM_EPISODES,
             "max_steps_per_episode": MAX_STEPS_PER_EPISODE,
             "rdc_step_duration": RDC_STEP_DURATION,
@@ -232,7 +247,7 @@ def main():
 
         # Log actions per head as histogram
         actions_array = np.array(actions_this_episode, dtype=int)
-        for head in range(NUM_COMMUNITIES):
+        for head in range(N_COMMUNITIES):
             writer.add_histogram(
                 f"Action/Head{head}", actions_array[:, head], global_step=episode
             )

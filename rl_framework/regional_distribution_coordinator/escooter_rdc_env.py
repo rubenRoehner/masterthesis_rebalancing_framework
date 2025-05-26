@@ -1,6 +1,6 @@
 import gymnasium as gym
-from gymnasium import spaces
 import numpy as np
+import pandas as pd
 from datetime import datetime, timedelta
 from typing import List
 import torch
@@ -13,10 +13,13 @@ class EscooterRDCEnv(gym.Env):
     def __init__(
         self,
         num_communities: int,
-        features_per_community: int,
+        n_zones: int,
         action_values: List[int],
         max_steps: int,
         fleet_size: int,
+        zone_community_map: pd.DataFrame,
+        zone_index_map: dict[str, int],
+        community_index_map: dict[str, int],
         pickup_demand_forecaster: DemandForecaster,
         dropoff_demand_forecaster: DemandForecaster,
         pickup_demand_provider: DemandProvider,
@@ -34,8 +37,11 @@ class EscooterRDCEnv(gym.Env):
         self.device = device
 
         self.num_communities = num_communities
-        self.features_per_community = features_per_community
-        self.allocator_state_dim = num_communities * features_per_community
+        self.n_zones = n_zones
+        self.zone_community_map = zone_community_map
+        self.zone_index_map = zone_index_map
+
+        self.community_index_map = community_index_map
 
         self.operator_rebalancing_cost = operator_rebalancing_cost
 
@@ -52,28 +58,10 @@ class EscooterRDCEnv(gym.Env):
         self.current_pickup_demand_forecast = np.zeros(num_communities)
         self.current_dropoff_demand_forecast = np.zeros(num_communities)
 
-        self.current_vehicle_counts = np.zeros(num_communities, dtype=int)
+        self.current_vehicle_counts = np.zeros(n_zones, dtype=int)
         self.fleet_size = fleet_size
 
         self.action_values = action_values
-        self.action_space = spaces.MultiDiscrete([len(action_values)] * num_communities)
-
-        self.observation_space = spaces.Dict(
-            {
-                "pickup_demand": spaces.Box(
-                    low=0, high=np.inf, shape=(self.num_communities,), dtype=np.float32
-                ),
-                "dropoff_demand": spaces.Box(
-                    low=0, high=np.inf, shape=(self.num_communities,), dtype=np.float32
-                ),
-                "current_vehicle_counts": spaces.Box(
-                    low=0,
-                    high=self.fleet_size,
-                    shape=(self.num_communities,),
-                    dtype=np.int32,
-                ),
-            }
-        )
 
         self.max_steps = max_steps
         self.current_step = 0
@@ -81,14 +69,25 @@ class EscooterRDCEnv(gym.Env):
         self.start_time = start_time
         self.step_duration = step_duration
 
+    def get_vehicle_counts_per_community(self) -> np.ndarray:
+        vehicle_counts_per_community = np.zeros(self.num_communities, dtype=int)
+        for i in range(self.n_zones):
+            community_id = self.zone_community_map.iloc[i]["community_index"]
+            community_index = self.community_index_map[community_id]
+            vehicle_counts_per_community[
+                community_index
+            ] += self.current_vehicle_counts[i]
+        return vehicle_counts_per_community
+
     def get_state_observation(self):
         observation = []
+        vehicle_counts_per_community = self.get_vehicle_counts_per_community()
 
         for i in range(self.num_communities):
             community_observation = [
                 self.current_pickup_demand_forecast[i],
                 self.current_dropoff_demand_forecast[i],
-                self.current_vehicle_counts[i],
+                vehicle_counts_per_community[i],
             ]
             observation.extend(community_observation)
 
@@ -146,35 +145,54 @@ class EscooterRDCEnv(gym.Env):
 
     def handle_rebalancing(self, actions: list[int]) -> int:
         total_vehicles_rebalanced = 0
-        temp_vehicle_counts = self.current_vehicle_counts.copy()
-        for i in range(self.num_communities):
-            allocation = actions[i]
+        temp_vehicle_counts = self.current_vehicle_counts.copy()  # len self.n_zones
+        for community_id, community_index in self.community_index_map.items():
+            allocation = actions[community_index]
 
-            temp_vehicle_counts[i] += allocation
+            zones_in_community = (
+                self.zone_community_map[
+                    self.zone_community_map["community_index"] == community_id
+                ]["grid_index"]
+                .map(self.zone_index_map)
+                .tolist()
+            )
 
-            if temp_vehicle_counts[i] < 0:
-                allocation = -temp_vehicle_counts[i]
-                temp_vehicle_counts[i] = 0
+            if allocation > 0:
+                vehicles_to_be_added = allocation
+                for _ in range(vehicles_to_be_added):
+                    emptiest_zones = min(
+                        zones_in_community, key=lambda z: temp_vehicle_counts[z]
+                    )
+                    temp_vehicle_counts[emptiest_zones] += 1
+                    total_vehicles_rebalanced += 1
 
-            total_vehicles_rebalanced += abs(allocation)
+            elif allocation < 0:
+                vehicles_to_be_removed = -allocation
+                for _ in range(vehicles_to_be_removed):
+                    fullest_zones = max(
+                        zones_in_community, key=lambda z: temp_vehicle_counts[z]
+                    )
+                    if temp_vehicle_counts[fullest_zones] > 0:
+                        temp_vehicle_counts[fullest_zones] -= 1
+                        total_vehicles_rebalanced += 1
 
         self.current_vehicle_counts = temp_vehicle_counts
         return total_vehicles_rebalanced
 
     def simulate_demand(self, current_time: datetime) -> float:
         total_satisfied_demand = 0
-        pickup_demand = self.pickup_demand_provider.get_demand_per_community(
+        pickup_demand = self.pickup_demand_provider.get_demand_per_zone(
             time_of_day=current_time.hour,
             day=current_time.day,
             month=current_time.month,
         )
-        dropoff_demand = self.dropoff_demand_provider.get_demand_per_community(
+        dropoff_demand = self.dropoff_demand_provider.get_demand_per_zone(
             time_of_day=current_time.hour,
             day=current_time.day,
             month=current_time.month,
         )
 
-        for i in range(self.num_communities):
+        for i in range(self.n_zones):
             updated_vehicle_count = self.current_vehicle_counts[i] + dropoff_demand[i]
             if updated_vehicle_count > pickup_demand[i]:
                 updated_vehicle_count -= pickup_demand[i]
@@ -212,6 +230,10 @@ class EscooterRDCEnv(gym.Env):
         terminated = False
         truncated = self.current_step >= self.max_steps
 
+        assert np.all(
+            self.current_vehicle_counts >= 0
+        ), "Negative scooter count detected!"
+
         info = {
             "total_vehicles_rebalanced": total_vehicles_rebalanced,
         }
@@ -220,11 +242,11 @@ class EscooterRDCEnv(gym.Env):
 
     def initialize_vehicle_counts(self):
         self.current_vehicle_counts = np.full(
-            self.num_communities,
-            self.fleet_size // self.num_communities,
+            self.n_zones,
+            self.fleet_size // self.n_zones,
             dtype=int,
         )
-        remaining_vehicles = self.fleet_size % self.num_communities
+        remaining_vehicles = self.fleet_size % self.n_zones
         for i in range(remaining_vehicles):
             self.current_vehicle_counts[i] += 1
 

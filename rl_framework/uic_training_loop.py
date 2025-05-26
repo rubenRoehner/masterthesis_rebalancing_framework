@@ -20,13 +20,11 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import EvalCallback
 
 # global parameters
-NUM_COMMUNITIES = 8
 COMMUNITY_ID = "861faa71fffffff"
-N_TOTAL_ZONES = 273
 FLEET_SIZE = 400
 N_EPOCHS = 20
 MAX_STEPS_PER_EPISODE = 256
-TOTAL_TIME_STEPS = 200_000
+TOTAL_TIME_STEPS = 50_000
 START_TIME = datetime(2025, 2, 11, 14, 0)
 
 N_WORKERS = 8
@@ -103,11 +101,19 @@ def main():
         "/home/ruroit00/rebalancing_framework/processed_data/grid_community_map.pickle"
     )
 
+    NUM_COMMUNITIES = ZONE_COMMUNITY_MAP["community_index"].nunique()
+    N_TOTAL_ZONES = ZONE_COMMUNITY_MAP.shape[0]
+    print(f"Total number of communities: {NUM_COMMUNITIES}")
+    print(f"Total number of zones: {N_TOTAL_ZONES}")
+    print(f"Community ID: {COMMUNITY_ID} ")
+
     ZONE_INDEX_MAP: dict[str, int] = {}
     for i, row in ZONE_COMMUNITY_MAP[
         ZONE_COMMUNITY_MAP["community_index"] == COMMUNITY_ID
     ].iterrows():
         ZONE_INDEX_MAP.update({row["grid_index"]: i})
+
+    print(f"Number of zones in community {COMMUNITY_ID}: {len(ZONE_INDEX_MAP)}")
 
     COMMUNTIY_ZONE_IDS = set(ZONE_INDEX_MAP.keys())
 
@@ -125,7 +131,7 @@ def main():
         ]
         ZONE_NEIGHBOR_MAP.update({row["grid_index"]: neighbors})
 
-    # Calculate the number of zones fore community COMMUNITY_ID
+    # Calculate the number of zones for community COMMUNITY_ID
     N_ZONES = ZONE_COMMUNITY_MAP[
         ZONE_COMMUNITY_MAP["community_index"] == COMMUNITY_ID
     ].shape[0]
@@ -138,7 +144,7 @@ def main():
         num_communities=NUM_COMMUNITIES,
         num_zones=N_TOTAL_ZONES,
         zone_community_map=ZONE_COMMUNITY_MAP,
-        model_path="/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/models/irregular_convolution_LSTM_37_1747222620_dropoff.pkl",
+        model_path="/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/models/irregular_convolution_LSTM_dropoff.pkl",
         demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
     )
 
@@ -146,7 +152,7 @@ def main():
         num_communities=NUM_COMMUNITIES,
         num_zones=N_TOTAL_ZONES,
         zone_community_map=ZONE_COMMUNITY_MAP,
-        model_path="/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/models/irregular_convolution_LSTM_29_1747224180_pickup.pkl",
+        model_path="/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/models/irregular_convolution_LSTM_pickup.pkl",
         demand_data_path=PICK_UP_DEMAND_DATA_PATH,
     )
 
