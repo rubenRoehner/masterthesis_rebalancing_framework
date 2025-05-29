@@ -18,8 +18,8 @@ from demand_forecasting.IrConv_LSTM_demand_forecaster import (
 from demand_provider.demand_provider_impl import DemandProviderImpl
 
 
-OPTIMIZE_REPLAY_BUFFER = True
-OPTIMIZE_ARCHITECTURE = False
+OPTIMIZE_REPLAY_BUFFER = False
+OPTIMIZE_ARCHITECTURE = True
 OPTIMIZE_LEARNING_RATE = False
 OPTIMIZE_EXPLORATION = False
 OPTIMIZE_REWARD_WEIGHTS = False
@@ -175,9 +175,9 @@ def objective(trial: optuna.Trial):
         )
     else:
         RDC_REPLAY_BUFFER_CAPACITY = 10_000
-        RDC_REPLAY_BUFFER_ALPHA = 0.6
-        RDC_REPLAY_BUFFER_BETA_START = 0.4
-        RDC_REPLAY_BUFFER_BETA_FRAMES = 100_000
+        RDC_REPLAY_BUFFER_ALPHA = 0.8
+        RDC_REPLAY_BUFFER_BETA_START = 0.3
+        RDC_REPLAY_BUFFER_BETA_FRAMES = 150_000
 
     if OPTIMIZE_ARCHITECTURE:
         RDC_BATCH_SIZE = trial.suggest_categorical(
@@ -209,8 +209,8 @@ def objective(trial: optuna.Trial):
         RDC_EPSILON_END = 0.05
         RDC_EPSILON_DECAY = 0.999
 
-    # RDC_TAU = 0.001
-    RDC_TAU = trial.suggest_float("rdc_tau", 0.001, 0.01, step=0.001)
+    RDC_TAU = 0.001
+    # RDC_TAU = trial.suggest_float("rdc_tau", 0.001, 0.01, step=0.001)
 
     RDC_STEP_DURATION = 60  # in minutes
 
