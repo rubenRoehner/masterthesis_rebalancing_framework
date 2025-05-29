@@ -20,7 +20,7 @@ class UserIncentiveCoordinator:
         clip_range: float,
         ent_coef: float,
         verbose: int,
-        tensorboard_log: str,
+        tensorboard_log: str | None,
     ):
         policy_kwargs = {
             "net_arch": dict(pi=[64, 64], vf=[64, 64]),
@@ -46,7 +46,10 @@ class UserIncentiveCoordinator:
 
     def train(self, total_timesteps: int, callback: MaybeCallback) -> PPO:
         model = self.model.learn(total_timesteps=total_timesteps, callback=callback)
-        self.model.save(self.tensorboard_log + "/outputs/user_incentive_coordinator")
-        print("Model saved as user_incentive_coordinator")
+        if self.tensorboard_log:
+            model.save(
+                self.tensorboard_log + "/outputs/user_incentive_coordinator/model"
+            )
+            print("Model saved in tensorboard log directory.")
         print("Training complete.")
         return model

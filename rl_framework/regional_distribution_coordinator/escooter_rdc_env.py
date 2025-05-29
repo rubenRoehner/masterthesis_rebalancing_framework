@@ -31,6 +31,7 @@ class EscooterRDCEnv(gym.Env):
         reward_weight_demand: float = 1.0,
         reward_weight_rebalancing: float = -0.5,
         reward_weight_gini: float = -0.1,
+        seed: int = 0,
     ):
         super(EscooterRDCEnv, self).__init__()
 
