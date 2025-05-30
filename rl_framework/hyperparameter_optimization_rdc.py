@@ -159,6 +159,8 @@ def make_env(
 
 
 def objective(trial: optuna.Trial):
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(trial.number % 4)
+
     # --- HYPERPARAMETERS ---
     if OPTIMIZE_REPLAY_BUFFER:
         RDC_REPLAY_BUFFER_CAPACITY = trial.suggest_int(
@@ -186,7 +188,7 @@ def objective(trial: optuna.Trial):
         RDC_HIDDEN_DIM = trial.suggest_categorical("rdc_hidden_dim", [64, 128, 256])
     else:
         RDC_BATCH_SIZE = 256
-        RDC_HIDDEN_DIM = 128
+        RDC_HIDDEN_DIM = 256
 
     if OPTIMIZE_LEARNING_RATE:
         RDC_LR = trial.suggest_loguniform("rdc_lr", 1e-6, 1e-4)
