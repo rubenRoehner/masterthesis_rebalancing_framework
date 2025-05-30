@@ -19,9 +19,9 @@ from demand_provider.demand_provider_impl import DemandProviderImpl
 
 
 OPTIMIZE_REPLAY_BUFFER = False
-OPTIMIZE_ARCHITECTURE = True
+OPTIMIZE_ARCHITECTURE = False
 OPTIMIZE_LEARNING_RATE = False
-OPTIMIZE_EXPLORATION = False
+OPTIMIZE_EXPLORATION = True
 OPTIMIZE_REWARD_WEIGHTS = False
 
 FLAG_LABELS = {
@@ -191,15 +191,15 @@ def objective(trial: optuna.Trial):
         RDC_HIDDEN_DIM = 256
 
     if OPTIMIZE_LEARNING_RATE:
-        RDC_LR = trial.suggest_loguniform("rdc_lr", 1e-6, 1e-4)
+        RDC_LR = trial.suggest_float("rdc_lr", 1e-6, 1e-4, log=True)
         RDC_LR_STEP_SIZE = trial.suggest_int("rdc_lr_step_size", 500, 2000, step=500)
         RDC_LR_GAMMA = trial.suggest_float("rdc_lr_gamma", 0.1, 0.9, step=0.1)
-        RDC_GAMMA = trial.suggest_float("rdc_gamma", 0.9, 0.999, step=0.05)
+        RDC_GAMMA = trial.suggest_float("rdc_gamma", 0.9, 0.999)
     else:
-        RDC_LR = 5e-6
-        RDC_LR_STEP_SIZE = 1000
-        RDC_LR_GAMMA = 0.5
-        RDC_GAMMA = 0.99
+        RDC_LR = 2.67e-6
+        RDC_LR_STEP_SIZE = 1500
+        RDC_LR_GAMMA = 0.9
+        RDC_GAMMA = 0.926
 
     RDC_EPSILON_START = 1.0
     if OPTIMIZE_EXPLORATION:
@@ -361,7 +361,7 @@ if __name__ == "__main__":
     study.optimize(
         objective,
         n_trials=N_TRIALS,
-        n_jobs=4,
+        n_jobs=5,
         callbacks=[save_trial_callback],
     )
 

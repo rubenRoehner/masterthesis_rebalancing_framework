@@ -61,9 +61,7 @@ class IrConvLstmDemandForecaster(DemandForecaster):
             "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/IrConv_LSTM"
         )
 
-        self.model: Irregular_Convolution_LSTM = torch.load(
-            model_path, weights_only=False, map_location=device
-        )
+        self.model = torch.load(model_path, weights_only=False, map_location=device)
         self.model.eval()
 
         self.demand_data_path = demand_data_path
@@ -222,10 +220,6 @@ class IrConvLstmDemandForecaster(DemandForecaster):
         for module in self.model.modules():
             if isinstance(module, torch.nn.modules.rnn.LSTM):
                 module.flatten_parameters()
-
-        self.model.convlstm_closeness.lstm.flatten_parameters()
-        self.model.convlstm_period.lstm.flatten_parameters()
-        self.model.convlstm_trend.lstm.flatten_parameters()
 
         closeness_tensor = Variable(
             torch.FloatTensor(closeness_data_np).unsqueeze(0)
