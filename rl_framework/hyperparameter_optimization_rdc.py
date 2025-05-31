@@ -21,8 +21,8 @@ from demand_provider.demand_provider_impl import DemandProviderImpl
 OPTIMIZE_REPLAY_BUFFER = False
 OPTIMIZE_ARCHITECTURE = False
 OPTIMIZE_LEARNING_RATE = False
-OPTIMIZE_EXPLORATION = True
-OPTIMIZE_REWARD_WEIGHTS = False
+OPTIMIZE_EXPLORATION = False
+OPTIMIZE_REWARD_WEIGHTS = True
 
 FLAG_LABELS = {
     "OPTIMIZE_REPLAY_BUFFER": "replaybuffer",
@@ -208,7 +208,7 @@ def objective(trial: optuna.Trial):
             "rdc_epsilon_decay", 0.995, 0.9995, step=0.0005
         )
     else:
-        RDC_EPSILON_END = 0.05
+        RDC_EPSILON_END = 0.06
         RDC_EPSILON_DECAY = 0.999
 
     RDC_TAU = 0.001
