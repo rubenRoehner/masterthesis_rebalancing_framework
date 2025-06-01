@@ -229,9 +229,9 @@ def objective(trial: optuna.Trial):
             "rdc_reward_weight_gini", 0.1, 0.5, step=0.05
         )
     else:
-        RDC_REWARD_WEIGHT_DEMAND = 1.0
-        RDC_REWARD_WEIGHT_REBALANCING = 1.0
-        RDC_REWARD_WEIGHT_GINI = 0.25
+        RDC_REWARD_WEIGHT_DEMAND = 1.1
+        RDC_REWARD_WEIGHT_REBALANCING = 1.1
+        RDC_REWARD_WEIGHT_GINI = 0.1
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
