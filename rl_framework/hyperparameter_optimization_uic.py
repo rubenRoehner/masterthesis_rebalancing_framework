@@ -3,7 +3,8 @@ import torch
 import pandas as pd
 import gymnasium as gym
 import optuna
-
+from optuna.study import Study
+from optuna.trial import FrozenTrial
 
 from demand_forecasting.IrConv_LSTM_demand_forecaster import (
     IrConvLstmDemandForecaster,
@@ -19,12 +20,19 @@ from user_incentive_coordinator.user_incentive_coordinator import (
 from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv, SubprocVecEnv
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import EvalCallback
+import csv
+import os
 
-# global parameters
+timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+study_filename = f"uic_ho_{timestamp}"
+output_dir = "ho_results"
+os.makedirs(output_dir, exist_ok=True)
 N_TRIALS = 20
 
+# global parameters
 COMMUNITY_ID = "861faa71fffffff"
-FLEET_SIZE = 400
+FLEET_SIZE = 120
 N_EPOCHS = 20
 MAX_STEPS_PER_EPISODE = 256
 TOTAL_TIME_STEPS = 10_000
@@ -122,6 +130,18 @@ pickup_demand_provider = DemandProviderImpl(
 )
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def save_trial_callback(study: Study, trial: FrozenTrial):
+    csv_path = os.path.join(output_dir, f"{study_filename}.csv")
+    header = ["trial_number"] + list(trial.params.keys()) + ["value"]
+    row = [trial.number] + list(trial.params.values()) + [trial.value]
+    write_header = trial.number == 0
+    with open(csv_path, "a", newline="") as f:
+        writer = csv.writer(f)
+        if write_header:
+            writer.writerow(header)
+        writer.writerow(row)
 
 
 def make_env(
@@ -252,7 +272,18 @@ if __name__ == "__main__":
         sampler=optuna.samplers.TPESampler(),
         study_name="escooter_uic_hyperparameter_optimization",
     )
-    study.optimize(objective, n_trials=N_TRIALS, n_jobs=1)
+    study.optimize(
+        objective,
+        n_trials=N_TRIALS,
+        n_jobs=1,
+        callbacks=[save_trial_callback],
+    )
+
+    df = study.trials_dataframe(
+        attrs=("number", "params", "value", "datetime_start", "duration", "user_attrs")
+    )
+    results_path = os.path.join(output_dir, f"{study_filename}_final.pickle")
+    df.to_pickle(results_path)
 
     print("Best hyperparameters:", study.best_params)
     print("Best mean reward:", study.best_value)
