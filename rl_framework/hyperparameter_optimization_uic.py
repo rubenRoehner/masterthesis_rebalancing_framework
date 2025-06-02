@@ -187,12 +187,14 @@ def make_env(
 
 
 def objective(trial: optuna.Trial) -> float:
-    learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-3, log=True)
+    learning_rate = trial.suggest_float(
+        "learning_rate", 1e-5, 1e-3, log=True, step=1e-5
+    )
     n_steps = trial.suggest_categorical("n_steps", [64, 128, 256, 512])
     batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
-    gamma = trial.suggest_float("gamma", 0.9, 0.999)
-    clip_range = trial.suggest_float("clip_range", 0.1, 0.3)
-    ent_coef = trial.suggest_float("ent_coef", 1e-4, 0.1, log=True)
+    gamma = trial.suggest_float("gamma", 0.9, 0.999, step=0.01)
+    clip_range = trial.suggest_float("clip_range", 0.1, 0.3, step=0.01)
+    ent_coef = trial.suggest_float("ent_coef", 1e-4, 0.1, log=True, step=1e-4)
 
     escooter_env = EscooterUICEnv(
         community_id=COMMUNITY_ID,

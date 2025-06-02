@@ -191,10 +191,10 @@ def objective(trial: optuna.Trial):
         RDC_HIDDEN_DIM = 256
 
     if OPTIMIZE_LEARNING_RATE:
-        RDC_LR = trial.suggest_float("rdc_lr", 1e-6, 1e-4, log=True)
+        RDC_LR = trial.suggest_float("rdc_lr", 1e-6, 1e-4, log=True, step=1e-6)
         RDC_LR_STEP_SIZE = trial.suggest_int("rdc_lr_step_size", 500, 2000, step=500)
         RDC_LR_GAMMA = trial.suggest_float("rdc_lr_gamma", 0.1, 0.9, step=0.1)
-        RDC_GAMMA = trial.suggest_float("rdc_gamma", 0.9, 0.999)
+        RDC_GAMMA = trial.suggest_float("rdc_gamma", 0.9, 0.999, step=0.001)
     else:
         RDC_LR = 2.67e-6
         RDC_LR_STEP_SIZE = 1500
