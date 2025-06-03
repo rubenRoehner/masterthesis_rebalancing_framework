@@ -53,13 +53,13 @@ REWARD_WEIGHT_REBALANCING = 0.5
 REWARD_WEIGHT_GINI = 0.25
 
 UIC_POLICY = "MultiInputPolicy"
-UIC_N_STEPS = 256
+UIC_N_STEPS = 64
 UIC_LEARNING_RATE = 3e-4
-UIC_GAMMA = 0.99
+UIC_GAMMA = 0.918
 UIC_GAE_LAMBDA = 0.95
-UIC_CLIP_RANGE = 0.2
-UIC_ENT_COEF = 0.01
-UIC_BATCH_SIZE = 32
+UIC_CLIP_RANGE = 0.29
+UIC_ENT_COEF = 0.07
+UIC_BATCH_SIZE = 64
 UIC_VERBOSE = 1
 UIC_TENSORBOARD_LOG = "rl_framework/runs/"
 
@@ -187,14 +187,12 @@ def make_env(
 
 
 def objective(trial: optuna.Trial) -> float:
-    learning_rate = trial.suggest_float(
-        "learning_rate", 1e-5, 1e-3, log=True, step=1e-5
-    )
+    learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-3, log=True)
     n_steps = trial.suggest_categorical("n_steps", [64, 128, 256, 512])
     batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
-    gamma = trial.suggest_float("gamma", 0.9, 0.999, step=0.01)
+    gamma = trial.suggest_float("gamma", 0.9, 0.999, step=0.001)
     clip_range = trial.suggest_float("clip_range", 0.1, 0.3, step=0.01)
-    ent_coef = trial.suggest_float("ent_coef", 1e-4, 0.1, log=True, step=1e-4)
+    ent_coef = trial.suggest_float("ent_coef", 1e-4, 0.1, log=True)
 
     escooter_env = EscooterUICEnv(
         community_id=COMMUNITY_ID,
