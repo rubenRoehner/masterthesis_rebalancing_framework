@@ -8,8 +8,8 @@ from regional_distribution_coordinator.regional_distribution_coordinator import 
     RegionalDistributionCoordinator,
 )
 from regional_distribution_coordinator.escooter_rdc_env import EscooterRDCEnv
-from demand_forecasting.IrConv_LSTM_demand_forecaster import (
-    IrConvLstmDemandForecaster,
+from demand_forecasting.IrConv_LSTM_pre_forecaster import (
+    IrConvLstmDemandPreForecaster,
 )
 from demand_provider.demand_provider_impl import DemandProviderImpl
 
@@ -75,25 +75,25 @@ def main():
     DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
     PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
 
+    DROP_OFF_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_dropoff_forecasts.pkl"
+    PICK_UP_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_pickup_forecasts.pkl"
     # REBALANCER_AGENT parameters
     # forecast for pickup, forecast for dropoff, and current vehicle counts
     # REBALANCER_AGENT_FEATURES_PER_ZONE = 3
 
     # --- INITIALIZE ENVIRONMENT ---
-    dropoff_demand_forecaster = IrConvLstmDemandForecaster(
+    dropoff_demand_forecaster = IrConvLstmDemandPreForecaster(
         num_communities=N_COMMUNITIES,
         num_zones=N_ZONES,
         zone_community_map=ZONE_COMMUNITY_MAP,
-        model_path="/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/models/irregular_convolution_LSTM_dropoff.pkl",
-        demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
+        demand_data_path=DROP_OFF_DEMAND_FORECAST_DATA_PATH,
     )
 
-    pickup_demand_forecaster = IrConvLstmDemandForecaster(
+    pickup_demand_forecaster = IrConvLstmDemandPreForecaster(
         num_communities=N_COMMUNITIES,
         num_zones=N_ZONES,
         zone_community_map=ZONE_COMMUNITY_MAP,
-        model_path="/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/models/irregular_convolution_LSTM_pickup.pkl",
-        demand_data_path=PICK_UP_DEMAND_DATA_PATH,
+        demand_data_path=PICK_UP_DEMAND_FORECAST_DATA_PATH,
     )
 
     dropoff_demand_provider = DemandProviderImpl(

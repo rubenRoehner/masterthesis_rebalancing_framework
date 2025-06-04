@@ -4,8 +4,8 @@ import pandas as pd
 import gymnasium as gym
 
 
-from demand_forecasting.IrConv_LSTM_demand_forecaster import (
-    IrConvLstmDemandForecaster,
+from demand_forecasting.IrConv_LSTM_pre_forecaster import (
+    IrConvLstmDemandPreForecaster,
 )
 from demand_forecasting.demand_forecaster import DemandForecaster
 from demand_provider.demand_provider_impl import DemandProviderImpl
@@ -20,6 +20,7 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import EvalCallback
 
 # global parameters
+# ['861faa44fffffff', '861faa637ffffff', '861faa707ffffff', '861faa717ffffff', '861faa71fffffff', '861faa787ffffff', '861faa78fffffff', '861faa7a7ffffff', '861faa7afffffff']
 COMMUNITY_ID = "861faa71fffffff"
 FLEET_SIZE = 120
 N_EPOCHS = 20
@@ -27,6 +28,7 @@ MAX_STEPS_PER_EPISODE = 256
 TOTAL_TIME_STEPS = 200_000
 START_TIME = datetime(2025, 2, 11, 14, 0)
 
+torch.cuda.set_device(3)
 N_WORKERS = 8
 BASE_SEED = 42
 
@@ -103,7 +105,7 @@ def main():
 
     NUM_COMMUNITIES = ZONE_COMMUNITY_MAP["community_index"].nunique()
     N_TOTAL_ZONES = ZONE_COMMUNITY_MAP.shape[0]
-    print(f"Total number of communities: {NUM_COMMUNITIES}")
+    print(f"Communities: {ZONE_COMMUNITY_MAP['community_index'].unique()}")
     print(f"Total number of zones: {N_TOTAL_ZONES}")
     print(f"Community ID: {COMMUNITY_ID} ")
 
@@ -139,21 +141,22 @@ def main():
     DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
     PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
 
+    DROP_OFF_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_dropoff_forecasts.pkl"
+    PICK_UP_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_pickup_forecasts.pkl"
+
     # --- INITIALIZE ENVIRONMENT ---
-    dropoff_demand_forecaster = IrConvLstmDemandForecaster(
+    dropoff_demand_forecaster = IrConvLstmDemandPreForecaster(
         num_communities=NUM_COMMUNITIES,
         num_zones=N_TOTAL_ZONES,
         zone_community_map=ZONE_COMMUNITY_MAP,
-        model_path="/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/models/irregular_convolution_LSTM_dropoff.pkl",
-        demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
+        demand_data_path=DROP_OFF_DEMAND_FORECAST_DATA_PATH,
     )
 
-    pickup_demand_forecaster = IrConvLstmDemandForecaster(
+    pickup_demand_forecaster = IrConvLstmDemandPreForecaster(
         num_communities=NUM_COMMUNITIES,
         num_zones=N_TOTAL_ZONES,
         zone_community_map=ZONE_COMMUNITY_MAP,
-        model_path="/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/models/irregular_convolution_LSTM_pickup.pkl",
-        demand_data_path=PICK_UP_DEMAND_DATA_PATH,
+        demand_data_path=PICK_UP_DEMAND_FORECAST_DATA_PATH,
     )
 
     dropoff_demand_provider = DemandProviderImpl(
