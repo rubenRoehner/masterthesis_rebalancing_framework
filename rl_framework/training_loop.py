@@ -46,21 +46,21 @@ def main():
         3  # forecast for pickup, forecast for dropoff, and current vehicle counts
     )
 
-    RDC_REPLAY_BUFFER_CAPACITY = 10000
-    RDC_REPLAY_BUFFER_ALPHA = 0.6
-    RDC_REPLAY_BUFFER_BETA_START = 0.4
-    RDC_REPLAY_BUFFER_BETA_FRAMES = 100_000
+    RDC_REPLAY_BUFFER_CAPACITY = 10_000
+    RDC_REPLAY_BUFFER_ALPHA = 0.8
+    RDC_REPLAY_BUFFER_BETA_START = 0.3
+    RDC_REPLAY_BUFFER_BETA_FRAMES = 150_000
 
     RDC_BATCH_SIZE = 256
-    RDC_HIDDEN_DIM = 128
+    RDC_HIDDEN_DIM = 256
 
-    RDC_LR = 5e-6
-    RDC_LR_STEP_SIZE = 1000
-    RDC_LR_GAMMA = 0.5
-    RDC_GAMMA = 0.99
+    RDC_LR = 2.67e-6
+    RDC_LR_STEP_SIZE = 1500
+    RDC_LR_GAMMA = 0.9
+    RDC_GAMMA = 0.926
 
     RDC_EPSILON_START = 1.0
-    RDC_EPSILON_END = 0.05
+    RDC_EPSILON_END = 0.06
     RDC_EPSILON_DECAY = 0.999
 
     RDC_TAU = 0.001
@@ -68,9 +68,9 @@ def main():
     RDC_STEP_DURATION = 60  # in minutes
 
     RDC_OPERATOR_REBALANCING_COST = 0.5
-    RDC_REWARD_WEIGHT_DEMAND = 1.0
-    RDC_REWARD_WEIGHT_REBALANCING = 1.0
-    RDC_REWARD_WEIGHT_GINI = 0.25
+    RDC_REWARD_WEIGHT_DEMAND = 1.1
+    RDC_REWARD_WEIGHT_REBALANCING = 1.1
+    RDC_REWARD_WEIGHT_GINI = 0.1
 
     DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
     PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
