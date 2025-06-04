@@ -36,7 +36,6 @@ BASE_SEED = 42
 UIC_STEP_DURATION = 60  # in minutes
 
 USER_WILLINGNESS = [0.0, 0.05, 0.1, 0.15, 0.3]
-MAX_INCENTIVE = 5.0
 INCENTIVE_LEVELS = 5
 
 REWARD_WEIGHT_DEMAND = 1.0
@@ -80,7 +79,6 @@ def make_env(
             zone_neighbor_map=zone_neighbor_map,
             zone_index_map=zone_index_map,
             user_willingness=USER_WILLINGNESS,
-            max_incentive=MAX_INCENTIVE,
             incentive_levels=INCENTIVE_LEVELS,
             max_steps=MAX_STEPS_PER_EPISODE,
             start_time=START_TIME + timedelta(minutes=rank * UIC_STEP_DURATION),
@@ -187,7 +185,6 @@ def main():
         zone_neighbor_map=ZONE_NEIGHBOR_MAP,
         zone_index_map=ZONE_INDEX_MAP,
         user_willingness=USER_WILLINGNESS,
-        max_incentive=MAX_INCENTIVE,
         incentive_levels=INCENTIVE_LEVELS,
         max_steps=MAX_STEPS_PER_EPISODE,
         start_time=START_TIME,

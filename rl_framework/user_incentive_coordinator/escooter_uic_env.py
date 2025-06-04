@@ -23,7 +23,6 @@ class EscooterUICEnv(gym.Env):
         dropoff_demand_forecaster: DemandForecaster,
         pickup_demand_provider: DemandProvider,
         dropoff_demand_provider: DemandProvider,
-        max_incentive: float,
         incentive_levels: int,
         max_steps: int,
         start_time: datetime,
@@ -73,7 +72,6 @@ class EscooterUICEnv(gym.Env):
         self.pickup_demand_provider = pickup_demand_provider
         self.dropoff_demand_provider = dropoff_demand_provider
 
-        self.max_incentive = max_incentive
         self.incentive_levels = incentive_levels
 
         self.current_pickup_demand_forecast = np.zeros(n_zones, dtype=np.float32)
@@ -81,7 +79,6 @@ class EscooterUICEnv(gym.Env):
 
         self.current_vehicle_counts = np.zeros(n_zones, dtype=int)
 
-        # Actions: For each zone, assign an incentive level (0 to incentive_levels-1)
         self.action_space = spaces.MultiDiscrete([incentive_levels] * self.n_zones)
 
         self.observation_space = spaces.Dict(
@@ -122,18 +119,14 @@ class EscooterUICEnv(gym.Env):
         }
 
     def calculate_current_time(self) -> datetime:
-        # Calculate the current time based on start_time, step_duration, and current_step
-        # cycle the timestamp index for increased training steps
         idx = (self.start_offset + self.current_step) % self.demand_trace_length
         return self.full_time_index_available[idx]
 
     def generate_demand_forecast(self, current_time: datetime):
-        # Get the current time of day, day of week, and month based on start_time, step_duration and current_step
         time_of_day = current_time.hour
         day = current_time.day
         month = current_time.month
 
-        # Generate demand forecasts for pickup and dropoff for all zones
         full_pickup_demand_forecast = (
             self.pickup_demand_forecaster.predict_demand_per_zone(
                 time_of_day, day, month
@@ -145,10 +138,8 @@ class EscooterUICEnv(gym.Env):
             )
         )
 
-        # Get the indices of the zones corresponding to the community
         zone_inidices = list(self.zone_index_map.values())
 
-        # Filter the demand forecasts based on the zone indices
         self.pickup_demand_forecast = full_pickup_demand_forecast[zone_inidices]
         self.dropoff_demand_forecast = full_dropoff_demand_forecast[zone_inidices]
 
@@ -198,8 +189,14 @@ class EscooterUICEnv(gym.Env):
                 return key
         return "None"
 
+    @staticmethod
     def handle_incentives(
-        self, action: List[int], dropoff_demand: np.ndarray
+        action: List[int],
+        dropoff_demand: np.ndarray,
+        zone_ids: List[str],
+        zone_id_to_local: dict[str, int],
+        zone_neighbor_map: dict[str, List[str]],
+        user_willingness: list[float],
     ) -> tuple[np.ndarray, int]:
         """
         Rebalance vehicles by shifting dropoff_demand from each zone to the
@@ -208,38 +205,28 @@ class EscooterUICEnv(gym.Env):
         total_vehicles_rebalanced = 0
         initial_dropoff = dropoff_demand.copy()
 
-        # Loop over every zone by its local index and ID
-        for local_idx, zone_id in enumerate(self.zone_ids):
-            # Raw neighbor IDs, pre-filtered to in-community in your training loop
-            raw_neighbors = self.zone_neighbor_map.get(zone_id, [])
+        for local_idx, zone_id in enumerate(zone_ids):
+            raw_neighbors = zone_neighbor_map.get(zone_id, [])
 
-            # Convert to local indices, *only* if present
             neighbor_local_idxs = [
-                self.zone_id_to_local[n]
-                for n in raw_neighbors
-                if n in self.zone_id_to_local
+                zone_id_to_local[n] for n in raw_neighbors if n in zone_id_to_local
             ]
             if not neighbor_local_idxs:
-                continue  # no valid neighbors
+                continue
 
-            # Collect their incentive values
-            incentives = np.array(
-                [action[nidx] for nidx in neighbor_local_idxs], dtype=np.float32
-            )
+            incentives = [action[idx] for idx in neighbor_local_idxs]
 
-            # Pick the best neighbor
-            best_pos = int(np.argmax(incentives))
-            best_local = neighbor_local_idxs[best_pos]
-            max_incentive = incentives[best_pos]
+            best_position = np.argmax(incentives)
+            best_local_index = neighbor_local_idxs[best_position]
+            max_incentive = incentives[best_position]
+            willingness = user_willingness[max_incentive]
 
             if max_incentive > 0:
-                # How many vehicles to move
-                v = int(dropoff_demand[local_idx] * max_incentive / self.max_incentive)
-                dropoff_demand[local_idx] -= v
-                dropoff_demand[best_local] += v
-                total_vehicles_rebalanced += v
+                n_scooter = int(dropoff_demand[local_idx] * willingness)
+                dropoff_demand[local_idx] -= n_scooter
+                dropoff_demand[best_local_index] += n_scooter
+                total_vehicles_rebalanced += n_scooter
 
-        # Sanity check
         if dropoff_demand.sum() != initial_dropoff.sum():
             raise ValueError(
                 f"Dropoff demand sum changed: {initial_dropoff.sum()} → {dropoff_demand.sum()}"
@@ -247,11 +234,30 @@ class EscooterUICEnv(gym.Env):
 
         return dropoff_demand, total_vehicles_rebalanced
 
+    @staticmethod
+    def update_vehicle_counts(
+        n_zones: int,
+        pickup_demand: np.ndarray,
+        dropoff_demand: np.ndarray,
+        current_vehicle_counts: np.ndarray,
+    ) -> tuple[np.ndarray, int]:
+        """ """
+        total_satisfied_demand = 0
+        for i in range(n_zones):
+            updated_vehicle_count = current_vehicle_counts[i] + dropoff_demand[i]
+            if updated_vehicle_count > pickup_demand[i]:
+                updated_vehicle_count -= pickup_demand[i]
+                total_satisfied_demand += pickup_demand[i]
+            else:
+                total_satisfied_demand += updated_vehicle_count
+                updated_vehicle_count = 0
+            current_vehicle_counts[i] = updated_vehicle_count
+        return current_vehicle_counts, total_satisfied_demand
+
     def step(self, action: List[int]):
         current_time = self.calculate_current_time()
 
         # --- simulate demand based on historical data ---
-        total_satisfied_demand = 0
         pickup_demand = self.pickup_demand_provider.get_demand_per_zone_community(
             time_of_day=current_time.hour,
             day=current_time.day,
@@ -265,21 +271,23 @@ class EscooterUICEnv(gym.Env):
             community_id=self.community_id,
         )
 
-        # update dropoff demand based on the incentives
-        dropoff_demand, total_vehicles_rebalanced = self.handle_incentives(
-            action, dropoff_demand
+        dropoff_demand, total_vehicles_rebalanced = EscooterUICEnv.handle_incentives(
+            action=action,
+            dropoff_demand=dropoff_demand,
+            zone_ids=self.zone_ids,
+            zone_id_to_local=self.zone_id_to_local,
+            zone_neighbor_map=self.zone_neighbor_map,
+            user_willingness=self.user_willingness,
         )
 
-        # Calculate total satisfied demand based on vehicle counts and demand
-        for i in range(self.n_zones):
-            updated_vehicle_count = self.current_vehicle_counts[i] + dropoff_demand[i]
-            if updated_vehicle_count > pickup_demand[i]:
-                updated_vehicle_count -= pickup_demand[i]
-                total_satisfied_demand += pickup_demand[i]
-            else:
-                total_satisfied_demand += updated_vehicle_count
-                updated_vehicle_count = 0
-            self.current_vehicle_counts[i] = updated_vehicle_count
+        self.current_vehicle_counts, total_satisfied_demand = (
+            EscooterUICEnv.update_vehicle_counts(
+                n_zones=self.n_zones,
+                pickup_demand=pickup_demand,
+                dropoff_demand=dropoff_demand,
+                current_vehicle_counts=self.current_vehicle_counts.copy(),
+            )
+        )
 
         reward = self.calculate_reward(
             total_satisfied_demand=total_satisfied_demand,

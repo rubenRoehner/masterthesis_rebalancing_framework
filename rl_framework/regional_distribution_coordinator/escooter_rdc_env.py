@@ -144,17 +144,24 @@ class EscooterRDCEnv(gym.Env):
         gini = diff.sum() / (2 * size**2 * mean)
         return gini
 
-    def handle_rebalancing(self, actions: list[int]) -> int:
+    @staticmethod
+    def handle_rebalancing(
+        actions: list[int],
+        current_vehicle_counts: np.ndarray,
+        community_index_map: dict[str, int],
+        zone_community_map: pd.DataFrame,
+        zone_index_map: dict[str, int],
+    ) -> tuple[int, np.ndarray]:
         total_vehicles_rebalanced = 0
-        temp_vehicle_counts = self.current_vehicle_counts.copy()  # len self.n_zones
-        for community_id, community_index in self.community_index_map.items():
+        temp_vehicle_counts = current_vehicle_counts.copy()
+        for community_id, community_index in community_index_map.items():
             allocation = actions[community_index]
 
             zones_in_community = (
-                self.zone_community_map[
-                    self.zone_community_map["community_index"] == community_id
+                zone_community_map[
+                    zone_community_map["community_index"] == community_id
                 ]["grid_index"]
-                .map(self.zone_index_map)
+                .map(zone_index_map)
                 .tolist()
             )
 
@@ -177,8 +184,7 @@ class EscooterRDCEnv(gym.Env):
                         temp_vehicle_counts[fullest_zones] -= 1
                         total_vehicles_rebalanced += 1
 
-        self.current_vehicle_counts = temp_vehicle_counts
-        return total_vehicles_rebalanced
+        return total_vehicles_rebalanced, temp_vehicle_counts
 
     def simulate_demand(self, current_time: datetime) -> float:
         total_satisfied_demand = 0
@@ -212,7 +218,15 @@ class EscooterRDCEnv(gym.Env):
     def step(self, action: List[int]):
         actual_action_allocations = [self.action_values[a] for a in action]
 
-        total_vehicles_rebalanced = self.handle_rebalancing(actual_action_allocations)
+        total_vehicles_rebalanced, self.current_vehicle_counts = (
+            EscooterRDCEnv.handle_rebalancing(
+                actions=actual_action_allocations,
+                current_vehicle_counts=self.current_vehicle_counts,
+                community_index_map=self.community_index_map,
+                zone_community_map=self.zone_community_map,
+                zone_index_map=self.zone_index_map,
+            )
+        )
 
         satisfied_demand_ratio = self.simulate_demand(
             current_time=self.calculate_current_time()
