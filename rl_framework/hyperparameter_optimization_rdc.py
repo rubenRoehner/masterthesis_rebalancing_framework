@@ -140,7 +140,6 @@ def make_env(
         max_steps=MAX_STEPS_PER_EPISODE,
         step_duration=timedelta(minutes=step_duration),
         start_time=START_TIME,
-        operator_rebalancing_cost=rebalancing_cost,
         reward_weight_demand=reward_weight_demand,
         reward_weight_rebalancing=reward_weight_rebalancing,
         reward_weight_gini=reward_weight_gini,
@@ -216,8 +215,6 @@ def objective(trial: optuna.Trial):
 
     RDC_STEP_DURATION = 60  # in minutes
 
-    RDC_OPERATOR_REBALANCING_COST = 0.5
-
     if OPTIMIZE_REWARD_WEIGHTS:
         RDC_REWARD_WEIGHT_DEMAND = trial.suggest_float(
             "rdc_reward_weight_demand", 0.5, 1.5, step=0.1
@@ -242,7 +239,6 @@ def objective(trial: optuna.Trial):
         max_steps=MAX_STEPS_PER_EPISODE,
         step_duration=timedelta(minutes=RDC_STEP_DURATION),
         start_time=START_TIME,
-        operator_rebalancing_cost=RDC_OPERATOR_REBALANCING_COST,
         reward_weight_demand=RDC_REWARD_WEIGHT_DEMAND,
         reward_weight_rebalancing=RDC_REWARD_WEIGHT_REBALANCING,
         reward_weight_gini=RDC_REWARD_WEIGHT_GINI,
@@ -265,7 +261,6 @@ def objective(trial: optuna.Trial):
         max_steps=MAX_STEPS_PER_EPISODE,
         step_duration=timedelta(minutes=RDC_STEP_DURATION),
         start_time=START_TIME,
-        operator_rebalancing_cost=RDC_OPERATOR_REBALANCING_COST,
         reward_weight_demand=RDC_REWARD_WEIGHT_DEMAND,
         reward_weight_rebalancing=RDC_REWARD_WEIGHT_REBALANCING,
         reward_weight_gini=RDC_REWARD_WEIGHT_GINI,

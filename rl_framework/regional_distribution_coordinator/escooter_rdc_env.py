@@ -25,7 +25,6 @@ class EscooterRDCEnv(gym.Env):
         pickup_demand_provider: DemandProvider,
         dropoff_demand_provider: DemandProvider,
         device: torch.device,
-        operator_rebalancing_cost: float = 0.5,
         start_time: datetime = datetime(2025, 2, 11, 14, 0),
         step_duration: timedelta = timedelta(minutes=60),
         reward_weight_demand: float = 1.0,
@@ -43,8 +42,6 @@ class EscooterRDCEnv(gym.Env):
         self.zone_index_map = zone_index_map
 
         self.community_index_map = community_index_map
-
-        self.operator_rebalancing_cost = operator_rebalancing_cost
 
         self.reward_weight_demand = reward_weight_demand
         self.reward_weight_rebalancing = reward_weight_rebalancing

@@ -21,7 +21,7 @@ from stable_baselines3.common.callbacks import EvalCallback
 
 # global parameters
 # ['861faa44fffffff', '861faa637ffffff', '861faa707ffffff', '861faa717ffffff', '861faa71fffffff', '861faa787ffffff', '861faa78fffffff', '861faa7a7ffffff', '861faa7afffffff']
-COMMUNITY_ID = "861faa71fffffff"
+COMMUNITY_ID = "861faa717ffffff"
 FLEET_SIZE = 120
 N_EPOCHS = 20
 MAX_STEPS_PER_EPISODE = 256
@@ -51,7 +51,7 @@ UIC_CLIP_RANGE = 0.29
 UIC_ENT_COEF = 0.07
 UIC_BATCH_SIZE = 64
 UIC_VERBOSE = 1
-UIC_TENSORBOARD_LOG = "rl_framework/runs/"
+UIC_TENSORBOARD_LOG = "rl_framework/runs/UIC/"
 
 
 def make_env(
@@ -219,10 +219,9 @@ def main():
 
     eval_callback = EvalCallback(
         eval_env=eval_env,
-        best_model_save_path=UIC_TENSORBOARD_LOG
-        + "/outputs/user_incentive_coordinator/",
-        log_path=UIC_TENSORBOARD_LOG + "/outputs/user_incentive_coordinator/eval_logs/",
-        eval_freq=1000,
+        best_model_save_path=UIC_TENSORBOARD_LOG + "/outputs/",
+        log_path=UIC_TENSORBOARD_LOG + "/outputs/eval_logs/",
+        eval_freq=100,
     )
 
     agent = UserIncentiveCoordinator(
@@ -246,17 +245,11 @@ def main():
     )
 
     train_envs.save(
-        UIC_TENSORBOARD_LOG
-        + "/outputs/user_incentive_coordinator/"
-        + COMMUNITY_ID
-        + "_env_train_normalize.pkl"
+        UIC_TENSORBOARD_LOG + "/outputs/" + COMMUNITY_ID + "_env_train_normalize.pkl"
     )
 
     agent.model.save(
-        UIC_TENSORBOARD_LOG
-        + "/outputs/user_incentive_coordinator/"
-        + COMMUNITY_ID
-        + "_user_incentive_coordinator"
+        UIC_TENSORBOARD_LOG + "/outputs/" + COMMUNITY_ID + "_user_incentive_coordinator"
     )
 
     print("Training completed.")

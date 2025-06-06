@@ -67,7 +67,6 @@ def main():
 
     RDC_STEP_DURATION = 60  # in minutes
 
-    RDC_OPERATOR_REBALANCING_COST = 0.5
     RDC_REWARD_WEIGHT_DEMAND = 1.1
     RDC_REWARD_WEIGHT_REBALANCING = 1.1
     RDC_REWARD_WEIGHT_GINI = 0.1
@@ -119,7 +118,6 @@ def main():
         max_steps=MAX_STEPS_PER_EPISODE,
         step_duration=timedelta(minutes=RDC_STEP_DURATION),
         start_time=START_TIME,
-        operator_rebalancing_cost=RDC_OPERATOR_REBALANCING_COST,
         reward_weight_demand=RDC_REWARD_WEIGHT_DEMAND,
         reward_weight_rebalancing=RDC_REWARD_WEIGHT_REBALANCING,
         reward_weight_gini=RDC_REWARD_WEIGHT_GINI,
@@ -182,7 +180,6 @@ def main():
             "rdc_features_per_community": RDC_FEATURES_PER_COMMUNITY,
             "rdc_hidden_dim": RDC_HIDDEN_DIM,
             "rdc_tau": RDC_TAU,
-            "rdc_operator_rebalancing_cost": RDC_OPERATOR_REBALANCING_COST,
             "rdc_reward_weight_demand": RDC_REWARD_WEIGHT_DEMAND,
             "rdc_reward_weight_rebalancing": RDC_REWARD_WEIGHT_REBALANCING,
             "rdc_reward_weight_gini": RDC_REWARD_WEIGHT_GINI,
