@@ -22,21 +22,18 @@ from stable_baselines3.common.callbacks import EvalCallback
 # global parameters
 # ['861faa44fffffff', '861faa637ffffff', '861faa707ffffff', '861faa717ffffff', '861faa71fffffff', '861faa787ffffff', '861faa78fffffff', '861faa7a7ffffff', '861faa7afffffff']
 COMMUNITY_ID = "861faa717ffffff"
-FLEET_SIZE = 120
+FLEET_SIZE = 70
 N_EPOCHS = 20
 MAX_STEPS_PER_EPISODE = 256
 TOTAL_TIME_STEPS = 200_000
 START_TIME = datetime(2025, 2, 11, 14, 0)
 
-torch.cuda.set_device(3)
+torch.cuda.set_device(2)
 N_WORKERS = 8
 BASE_SEED = 42
 
 # UIC parameters
 UIC_STEP_DURATION = 60  # in minutes
-
-USER_WILLINGNESS = [0.0, 0.05, 0.1, 0.15, 0.3]
-INCENTIVE_LEVELS = 5
 
 REWARD_WEIGHT_DEMAND = 1.0
 REWARD_WEIGHT_REBALANCING = 0.5
@@ -51,7 +48,19 @@ UIC_CLIP_RANGE = 0.29
 UIC_ENT_COEF = 0.07
 UIC_BATCH_SIZE = 64
 UIC_VERBOSE = 1
+UIC_POLICY_KWARGS = {
+    "net_arch": dict(pi=[64, 64], vf=[64, 64]),
+    "activation_fn": torch.nn.ReLU,
+}
+UIC_VF_COEF = 0.5
+UIC_TARGET_KL = None
 UIC_TENSORBOARD_LOG = "rl_framework/runs/UIC/"
+
+
+@staticmethod
+def USER_WILLINGNESS_FN(incentive: float) -> float:
+    """ """
+    return 0.4 * incentive
 
 
 def make_env(
@@ -78,8 +87,7 @@ def make_env(
             device=device,
             zone_neighbor_map=zone_neighbor_map,
             zone_index_map=zone_index_map,
-            user_willingness=USER_WILLINGNESS,
-            incentive_levels=INCENTIVE_LEVELS,
+            user_willingness_fn=USER_WILLINGNESS_FN,
             max_steps=MAX_STEPS_PER_EPISODE,
             start_time=START_TIME + timedelta(minutes=rank * UIC_STEP_DURATION),
             step_duration=timedelta(minutes=UIC_STEP_DURATION),
@@ -184,8 +192,7 @@ def main():
         device=device,
         zone_neighbor_map=ZONE_NEIGHBOR_MAP,
         zone_index_map=ZONE_INDEX_MAP,
-        user_willingness=USER_WILLINGNESS,
-        incentive_levels=INCENTIVE_LEVELS,
+        user_willingness_fn=USER_WILLINGNESS_FN,
         max_steps=MAX_STEPS_PER_EPISODE,
         start_time=START_TIME,
         step_duration=timedelta(minutes=UIC_STEP_DURATION),
@@ -236,6 +243,9 @@ def main():
         clip_range=UIC_CLIP_RANGE,
         ent_coef=UIC_ENT_COEF,
         verbose=UIC_VERBOSE,
+        policy_kwargs=UIC_POLICY_KWARGS,
+        vf_coef=UIC_VF_COEF,
+        target_kl=UIC_TARGET_KL,
         tensorboard_log=UIC_TENSORBOARD_LOG,
     )
 

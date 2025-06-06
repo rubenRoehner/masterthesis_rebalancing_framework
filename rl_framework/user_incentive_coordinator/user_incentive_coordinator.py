@@ -21,11 +21,16 @@ class UserIncentiveCoordinator:
         ent_coef: float,
         verbose: int,
         tensorboard_log: str | None,
+        policy_kwargs: dict | None = None,
+        vf_coef: float = 0.5,
+        target_kl: float | None = None,
     ):
-        policy_kwargs = {
-            "net_arch": dict(pi=[64, 64], vf=[64, 64]),
-            "activation_fn": nn.ReLU,
-        }
+
+        if policy_kwargs is None:
+            policy_kwargs = {
+                "net_arch": dict(pi=[64, 64], vf=[64, 64]),
+                "activation_fn": nn.ReLU,
+            }
         self.tensorboard_log = tensorboard_log
 
         self.model = PPO(
@@ -37,15 +42,22 @@ class UserIncentiveCoordinator:
             n_epochs=n_epochs,
             gamma=gamma,
             gae_lambda=gae_lambda,
-            clip_range=clip_range,
+            clip_range=get_schedule_fn(clip_range),
             ent_coef=ent_coef,
             verbose=verbose,
             tensorboard_log=tensorboard_log,
             policy_kwargs=policy_kwargs,
+            vf_coef=vf_coef,
+            target_kl=target_kl,
         )
 
     def train(self, total_timesteps: int, callback: MaybeCallback) -> PPO:
-        model = self.model.learn(total_timesteps=total_timesteps, callback=callback)
+        model = self.model.learn(
+            total_timesteps=total_timesteps,
+            callback=callback,
+            progress_bar=True,
+            tb_log_name="UserIncentiveCoordinator",
+        )
         if self.tensorboard_log:
             model.save(
                 self.tensorboard_log + "/outputs/user_incentive_coordinator/model"

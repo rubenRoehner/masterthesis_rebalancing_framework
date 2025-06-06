@@ -17,6 +17,8 @@ from user_incentive_coordinator.user_incentive_coordinator import (
     UserIncentiveCoordinator,
 )
 
+from uic_training_loop import USER_WILLINGNESS_FN
+
 from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv, SubprocVecEnv
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import EvalCallback
@@ -28,11 +30,11 @@ timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 study_filename = f"uic_ho_{timestamp}"
 output_dir = "ho_results"
 os.makedirs(output_dir, exist_ok=True)
-N_TRIALS = 20
+N_TRIALS = 30
 
 # global parameters
 COMMUNITY_ID = "861faa71fffffff"
-FLEET_SIZE = 120
+FLEET_SIZE = 70
 N_EPOCHS = 20
 MAX_STEPS_PER_EPISODE = 256
 TOTAL_TIME_STEPS = 10_000
@@ -43,9 +45,6 @@ BASE_SEED = 42
 
 # UIC parameters
 UIC_STEP_DURATION = 60  # in minutes
-
-USER_WILLINGNESS = [0.0, 0.05, 0.1, 0.15, 0.3]
-INCENTIVE_LEVELS = 5
 
 REWARD_WEIGHT_DEMAND = 1.0
 REWARD_WEIGHT_REBALANCING = 0.5
@@ -129,6 +128,7 @@ pickup_demand_provider = DemandProviderImpl(
     demand_data_path=PICK_UP_DEMAND_DATA_PATH,
 )
 
+torch.cuda.set_device(2)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -168,8 +168,7 @@ def make_env(
             device=device,
             zone_neighbor_map=zone_neighbor_map,
             zone_index_map=zone_index_map,
-            user_willingness=USER_WILLINGNESS,
-            incentive_levels=INCENTIVE_LEVELS,
+            user_willingness_fn=USER_WILLINGNESS_FN,
             max_steps=MAX_STEPS_PER_EPISODE,
             start_time=START_TIME + timedelta(minutes=rank * UIC_STEP_DURATION),
             step_duration=timedelta(minutes=UIC_STEP_DURATION),
@@ -187,10 +186,40 @@ def make_env(
 def objective(trial: optuna.Trial) -> float:
     learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-3, log=True)
     n_steps = trial.suggest_categorical("n_steps", [64, 128, 256, 512])
-    batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
+    batch_size = trial.suggest_categorical("batch_size", [16, 32, 64, 128])
     gamma = trial.suggest_float("gamma", 0.9, 0.999, step=0.001)
     clip_range = trial.suggest_float("clip_range", 0.1, 0.3, step=0.01)
     ent_coef = trial.suggest_float("ent_coef", 1e-4, 0.1, log=True)
+    vf_coef = trial.suggest_float("vf_coef", 0.1, 1.0, step=0.1)
+
+    raw_target_kl = trial.suggest_categorical(
+        "use_target_kl", [None, 0.005, 0.01, 0.02]
+    )
+    if raw_target_kl is None:
+        target_kl: float | None = None
+    else:
+        target_kl = float(raw_target_kl)
+
+    n_layers = trial.suggest_int("n_layers", 2, 3)
+    hidden_size = trial.suggest_categorical("hidden_size", [64, 128, 256])
+    activation_name = trial.suggest_categorical(
+        "activation", ["ReLU", "Tanh", "LeakyReLU"]
+    )
+    if activation_name == "ReLU":
+        activation_fn = torch.nn.ReLU
+    elif activation_name == "Tanh":
+        activation_fn = torch.nn.Tanh
+    else:
+        activation_fn = torch.nn.LeakyReLU
+
+    net_arch = [
+        dict(shared=[hidden_size] * n_layers, pi=[hidden_size], vf=[hidden_size])
+    ]
+
+    policy_kwargs = {
+        "net_arch": net_arch,
+        "activation_fn": activation_fn,
+    }
 
     escooter_env = EscooterUICEnv(
         community_id=COMMUNITY_ID,
@@ -203,8 +232,7 @@ def objective(trial: optuna.Trial) -> float:
         device=device,
         zone_neighbor_map=ZONE_NEIGHBOR_MAP,
         zone_index_map=ZONE_INDEX_MAP,
-        user_willingness=USER_WILLINGNESS,
-        incentive_levels=INCENTIVE_LEVELS,
+        user_willingness_fn=USER_WILLINGNESS_FN,
         max_steps=MAX_STEPS_PER_EPISODE,
         start_time=START_TIME,
         step_duration=timedelta(minutes=UIC_STEP_DURATION),
@@ -254,6 +282,9 @@ def objective(trial: optuna.Trial) -> float:
         ent_coef=ent_coef,
         verbose=0,
         tensorboard_log=None,
+        vf_coef=vf_coef,
+        target_kl=target_kl,
+        policy_kwargs=policy_kwargs,
     )
 
     agent.train(

@@ -3,7 +3,7 @@ from gymnasium import spaces
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
-from typing import List
+from typing import Callable, List
 import torch
 
 from demand_forecasting.demand_forecaster import DemandForecaster
@@ -18,12 +18,11 @@ class EscooterUICEnv(gym.Env):
         fleet_size: int,
         zone_neighbor_map: dict[str, List[str]],  # str -> List[str]
         zone_index_map: dict[str, int],  # str -> int
-        user_willingness: list[float],
+        user_willingness_fn: Callable[[float], float],
         pickup_demand_forecaster: DemandForecaster,
         dropoff_demand_forecaster: DemandForecaster,
         pickup_demand_provider: DemandProvider,
         dropoff_demand_provider: DemandProvider,
-        incentive_levels: int,
         max_steps: int,
         start_time: datetime,
         step_duration: timedelta,
@@ -58,7 +57,7 @@ class EscooterUICEnv(gym.Env):
         self.fleet_size = fleet_size
         self.zone_neighbor_map = zone_neighbor_map
         self.zone_index_map = zone_index_map
-        self.user_willingness = user_willingness
+        self.user_willingness_fn = user_willingness_fn
 
         # List of all in-community zone IDs, in a consistent order
         self.zone_ids = list(self.zone_index_map.keys())
@@ -72,14 +71,12 @@ class EscooterUICEnv(gym.Env):
         self.pickup_demand_provider = pickup_demand_provider
         self.dropoff_demand_provider = dropoff_demand_provider
 
-        self.incentive_levels = incentive_levels
-
         self.current_pickup_demand_forecast = np.zeros(n_zones, dtype=np.float32)
         self.current_dropoff_demand_forecast = np.zeros(n_zones, dtype=np.float32)
 
         self.current_vehicle_counts = np.zeros(n_zones, dtype=int)
 
-        self.action_space = spaces.MultiDiscrete([incentive_levels] * self.n_zones)
+        self.action_space = spaces.Box(0.0, 1.0, shape=(n_zones,), dtype=np.float32)
 
         self.observation_space = spaces.Dict(
             {
@@ -183,20 +180,14 @@ class EscooterUICEnv(gym.Env):
         gini = diff.sum() / (2 * size**2 * mean)
         return gini
 
-    def find_key(self, value: int):
-        for key, val in self.zone_index_map.items():
-            if val == value:
-                return key
-        return "None"
-
     @staticmethod
     def handle_incentives(
-        action: List[int],
+        action: np.ndarray,
         dropoff_demand: np.ndarray,
         zone_ids: List[str],
         zone_id_to_local: dict[str, int],
         zone_neighbor_map: dict[str, List[str]],
-        user_willingness: list[float],
+        user_willingness_fn: Callable[[float], float],
     ) -> tuple[np.ndarray, int]:
         """
         Rebalance vehicles by shifting dropoff_demand from each zone to the
@@ -214,12 +205,12 @@ class EscooterUICEnv(gym.Env):
             if not neighbor_local_idxs:
                 continue
 
-            incentives = [action[idx] for idx in neighbor_local_idxs]
+            incentives: list[float] = [action[idx] for idx in neighbor_local_idxs]
 
             best_position = np.argmax(incentives)
             best_local_index = neighbor_local_idxs[best_position]
             max_incentive = incentives[best_position]
-            willingness = user_willingness[max_incentive]
+            willingness = user_willingness_fn(max_incentive)
 
             if max_incentive > 0:
                 n_scooter = int(dropoff_demand[local_idx] * willingness)
@@ -254,7 +245,7 @@ class EscooterUICEnv(gym.Env):
             current_vehicle_counts[i] = updated_vehicle_count
         return current_vehicle_counts, total_satisfied_demand
 
-    def step(self, action: List[int]):
+    def step(self, action: np.ndarray):
         current_time = self.calculate_current_time()
 
         # --- simulate demand based on historical data ---
@@ -277,7 +268,7 @@ class EscooterUICEnv(gym.Env):
             zone_ids=self.zone_ids,
             zone_id_to_local=self.zone_id_to_local,
             zone_neighbor_map=self.zone_neighbor_map,
-            user_willingness=self.user_willingness,
+            user_willingness_fn=self.user_willingness_fn,
         )
 
         self.current_vehicle_counts, total_satisfied_demand = (

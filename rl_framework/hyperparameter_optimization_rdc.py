@@ -124,39 +124,6 @@ def save_trial_callback(study: Study, trial: FrozenTrial):
         writer.writerow(row)
 
 
-def make_env(
-    step_duration: int,
-    rebalancing_cost: float,
-    reward_weight_demand: float,
-    reward_weight_rebalancing: float,
-    reward_weight_gini: float,
-    device: torch.device,
-    seed: int,
-):
-    env = EscooterRDCEnv(
-        num_communities=N_COMMUNITIES,
-        n_zones=N_ZONES,
-        action_values=RDC_ACTION_VALUES,
-        max_steps=MAX_STEPS_PER_EPISODE,
-        step_duration=timedelta(minutes=step_duration),
-        start_time=START_TIME,
-        reward_weight_demand=reward_weight_demand,
-        reward_weight_rebalancing=reward_weight_rebalancing,
-        reward_weight_gini=reward_weight_gini,
-        zone_community_map=ZONE_COMMUNITY_MAP,
-        zone_index_map=ZONE_INDEX_MAP,
-        community_index_map=COMMUNITY_INDEX_MAP,
-        dropoff_demand_forecaster=dropoff_demand_forecaster,
-        pickup_demand_forecaster=pickup_demand_forecaster,
-        dropoff_demand_provider=dropoff_demand_provider,
-        pickup_demand_provider=pickup_demand_provider,
-        device=device,
-        fleet_size=FLEET_SIZE,
-    )
-    env.reset(seed=seed)
-    return lambda: env
-
-
 def objective(trial: optuna.Trial):
     os.environ["CUDA_VISIBLE_DEVICES"] = str(trial.number % 4)
 
