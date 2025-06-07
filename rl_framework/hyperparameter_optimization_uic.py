@@ -33,11 +33,11 @@ os.makedirs(output_dir, exist_ok=True)
 N_TRIALS = 30
 
 # global parameters
-COMMUNITY_ID = "861faa71fffffff"
-FLEET_SIZE = 70
+COMMUNITY_ID = "861faa7afffffff"
+FLEET_SIZE = 40
 N_EPOCHS = 20
 MAX_STEPS_PER_EPISODE = 256
-TOTAL_TIME_STEPS = 10_000
+TOTAL_TIME_STEPS = 30_000
 START_TIME = datetime(2025, 2, 11, 14, 0)
 
 N_WORKERS = 1
@@ -184,12 +184,12 @@ def make_env(
 
 
 def objective(trial: optuna.Trial) -> float:
-    learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-3, log=True)
-    n_steps = trial.suggest_categorical("n_steps", [64, 128, 256, 512])
-    batch_size = trial.suggest_categorical("batch_size", [16, 32, 64, 128])
-    gamma = trial.suggest_float("gamma", 0.9, 0.999, step=0.001)
-    clip_range = trial.suggest_float("clip_range", 0.1, 0.3, step=0.01)
-    ent_coef = trial.suggest_float("ent_coef", 1e-4, 0.1, log=True)
+    learning_rate = trial.suggest_float("learning_rate", 1e-6, 2e-4, log=True)
+    n_steps = trial.suggest_categorical("n_steps", [256, 512])
+    batch_size = trial.suggest_categorical("batch_size", [32, 64])
+    gamma = trial.suggest_float("gamma", 0.88, 0.95, step=0.001)
+    clip_range = trial.suggest_float("clip_range", 0.12, 0.22, step=0.01)
+    ent_coef = trial.suggest_float("ent_coef", 1e-6, 1e-2, log=True)
     vf_coef = trial.suggest_float("vf_coef", 0.1, 1.0, step=0.1)
 
     raw_target_kl = trial.suggest_categorical(

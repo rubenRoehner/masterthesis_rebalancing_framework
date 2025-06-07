@@ -21,8 +21,8 @@ from stable_baselines3.common.callbacks import EvalCallback
 
 # global parameters
 # ['861faa44fffffff', '861faa637ffffff', '861faa707ffffff', '861faa717ffffff', '861faa71fffffff', '861faa787ffffff', '861faa78fffffff', '861faa7a7ffffff', '861faa7afffffff']
-COMMUNITY_ID = "861faa717ffffff"
-FLEET_SIZE = 70
+COMMUNITY_ID = "861faa7afffffff"
+FLEET_SIZE = 40
 N_EPOCHS = 20
 MAX_STEPS_PER_EPISODE = 256
 TOTAL_TIME_STEPS = 200_000
