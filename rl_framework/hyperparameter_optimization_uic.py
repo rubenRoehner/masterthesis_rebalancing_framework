@@ -212,12 +212,11 @@ def objective(trial: optuna.Trial) -> float:
     else:
         activation_fn = torch.nn.LeakyReLU
 
-    net_arch = [
-        dict(shared=[hidden_size] * n_layers, pi=[hidden_size], vf=[hidden_size])
-    ]
-
     policy_kwargs = {
-        "net_arch": net_arch,
+        "net_arch": dict(
+            pi=[hidden_size] * n_layers,
+            vf=[hidden_size] * n_layers,
+        ),
         "activation_fn": activation_fn,
     }
 

@@ -19,9 +19,19 @@ from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv, SubprocV
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import EvalCallback
 
+# Best hyperparameters: {'learning_rate': 1.0920802054925035e-06, 'n_steps': 512, 'batch_size': 32, 'gamma': 0.918, 'clip_range': 0.13, 'ent_coef': 0.0007835438398052651, 'vf_coef': 0.6, 'use_target_kl': 0.02, 'n_layers': 3, 'hidden_size': 256, 'activation': 'Tanh'}
 # global parameters
-# ['861faa44fffffff', '861faa637ffffff', '861faa707ffffff', '861faa717ffffff', '861faa71fffffff', '861faa787ffffff', '861faa78fffffff', '861faa7a7ffffff', '861faa7afffffff']
-COMMUNITY_ID = "861faa7afffffff"
+COMMUNITY_IDS = [
+    "861faa44fffffff",
+    "861faa637ffffff",
+    "861faa707ffffff",
+    "861faa717ffffff",
+    "861faa71fffffff",
+    "861faa787ffffff",
+    "861faa78fffffff",
+    "861faa7a7ffffff",
+    "861faa7afffffff",
+]
 FLEET_SIZE = 40
 N_EPOCHS = 20
 MAX_STEPS_PER_EPISODE = 256
@@ -40,20 +50,20 @@ REWARD_WEIGHT_REBALANCING = 0.5
 REWARD_WEIGHT_GINI = 0.25
 
 UIC_POLICY = "MultiInputPolicy"
-UIC_N_STEPS = 64
+UIC_N_STEPS = 512
 UIC_LEARNING_RATE = 3e-4
-UIC_GAMMA = 0.918
+UIC_GAMMA = 0.938
 UIC_GAE_LAMBDA = 0.95
-UIC_CLIP_RANGE = 0.29
+UIC_CLIP_RANGE = 0.12
 UIC_ENT_COEF = 0.07
-UIC_BATCH_SIZE = 64
+UIC_BATCH_SIZE = 32
 UIC_VERBOSE = 1
 UIC_POLICY_KWARGS = {
-    "net_arch": dict(pi=[64, 64], vf=[64, 64]),
-    "activation_fn": torch.nn.ReLU,
+    "net_arch": dict(pi=[128, 128, 128], vf=[128, 128, 128]),
+    "activation_fn": torch.nn.Tanh,
 }
-UIC_VF_COEF = 0.5
-UIC_TARGET_KL = None
+UIC_VF_COEF = 0.6
+UIC_TARGET_KL = 0.03
 UIC_TENSORBOARD_LOG = "rl_framework/runs/UIC/"
 
 
@@ -73,11 +83,12 @@ def make_env(
     device: torch.device,
     zone_neighbor_map: dict[str, list[str]],
     zone_index_map: dict[str, int],
+    community_id: str,
     seed: int = 0,
 ):
     def _init():
         env: gym.Env = EscooterUICEnv(
-            community_id=COMMUNITY_ID,
+            community_id=community_id,
             n_zones=n_zones,
             fleet_size=FLEET_SIZE,
             dropoff_demand_forecaster=dropoff_demand_forecaster,
@@ -102,7 +113,7 @@ def make_env(
     return _init
 
 
-def main():
+def train_uic(community_id: str):
 
     # [grid_index, community_id]
     ZONE_COMMUNITY_MAP: pd.DataFrame = pd.read_pickle(
@@ -113,15 +124,15 @@ def main():
     N_TOTAL_ZONES = ZONE_COMMUNITY_MAP.shape[0]
     print(f"Communities: {ZONE_COMMUNITY_MAP['community_index'].unique()}")
     print(f"Total number of zones: {N_TOTAL_ZONES}")
-    print(f"Community ID: {COMMUNITY_ID} ")
+    print(f"Community ID: {community_id} ")
 
     ZONE_INDEX_MAP: dict[str, int] = {}
     for i, row in ZONE_COMMUNITY_MAP[
-        ZONE_COMMUNITY_MAP["community_index"] == COMMUNITY_ID
+        ZONE_COMMUNITY_MAP["community_index"] == community_id
     ].iterrows():
         ZONE_INDEX_MAP.update({row["grid_index"]: i})
 
-    print(f"Number of zones in community {COMMUNITY_ID}: {len(ZONE_INDEX_MAP)}")
+    print(f"Number of zones in community {community_id}: {len(ZONE_INDEX_MAP)}")
 
     COMMUNTIY_ZONE_IDS = set(ZONE_INDEX_MAP.keys())
 
@@ -141,7 +152,7 @@ def main():
 
     # Calculate the number of zones for community COMMUNITY_ID
     N_ZONES = ZONE_COMMUNITY_MAP[
-        ZONE_COMMUNITY_MAP["community_index"] == COMMUNITY_ID
+        ZONE_COMMUNITY_MAP["community_index"] == community_id
     ].shape[0]
 
     DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
@@ -182,7 +193,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     escooter_env = EscooterUICEnv(
-        community_id=COMMUNITY_ID,
+        community_id=community_id,
         n_zones=N_ZONES,
         fleet_size=FLEET_SIZE,
         dropoff_demand_forecaster=dropoff_demand_forecaster,
@@ -213,6 +224,7 @@ def main():
                 device=device,
                 zone_neighbor_map=ZONE_NEIGHBOR_MAP,
                 zone_index_map=ZONE_INDEX_MAP,
+                community_id=community_id,
                 seed=BASE_SEED,
             )
             for i in range(N_WORKERS)
@@ -255,15 +267,23 @@ def main():
     )
 
     train_envs.save(
-        UIC_TENSORBOARD_LOG + "/outputs/" + COMMUNITY_ID + "_env_train_normalize.pkl"
+        UIC_TENSORBOARD_LOG + "/outputs/" + community_id + "_env_train_normalize.pkl"
     )
 
     agent.model.save(
-        UIC_TENSORBOARD_LOG + "/outputs/" + COMMUNITY_ID + "_user_incentive_coordinator"
+        UIC_TENSORBOARD_LOG + "/outputs/" + community_id + "_user_incentive_coordinator"
     )
 
     print("Training completed.")
 
 
+def train_all_uics():
+    for community_id in COMMUNITY_IDS:
+        print(f"Training UIC for community {community_id}...")
+        train_uic(community_id)
+        print(f"UIC training completed for community {community_id}.\n")
+
+
 if __name__ == "__main__":
-    main()
+    train_all_uics()
+    # train_uic(COMMUNITY_IDS[0])
