@@ -12,8 +12,8 @@ from regional_distribution_coordinator.regional_distribution_coordinator import 
     RegionalDistributionCoordinator,
 )
 from regional_distribution_coordinator.escooter_rdc_env import EscooterRDCEnv
-from demand_forecasting.IrConv_LSTM_demand_forecaster import (
-    IrConvLstmDemandForecaster,
+from demand_forecasting.IrConv_LSTM_pre_forecaster import (
+    IrConvLstmDemandPreForecaster,
 )
 from demand_provider.demand_provider_impl import DemandProviderImpl
 
@@ -44,10 +44,10 @@ timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
 study_filename = f"rdc_ho_{study_label}_{timestamp}"
 
-N_TRIALS = 20
+N_TRIALS = 30
 
 # global parameters
-FLEET_SIZE = 1000
+FLEET_SIZE = 500
 N_TRAINING_EPISODES = 100
 N_EVAL_EPISODES = 20
 MAX_STEPS_PER_EPISODE = 100
@@ -80,21 +80,22 @@ RDC_FEATURES_PER_COMMUNITY = 3
 DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
 PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
 
+DROP_OFF_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_dropoff_forecasts.pkl"
+PICK_UP_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_pickup_forecasts.pkl"
+
 # --- INITIALIZE ENVIRONMENT ---
-dropoff_demand_forecaster = IrConvLstmDemandForecaster(
+dropoff_demand_forecaster = IrConvLstmDemandPreForecaster(
     num_communities=N_COMMUNITIES,
     num_zones=N_ZONES,
     zone_community_map=ZONE_COMMUNITY_MAP,
-    model_path="/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/models/irregular_convolution_LSTM_dropoff.pkl",
-    demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
+    demand_data_path=DROP_OFF_DEMAND_FORECAST_DATA_PATH,
 )
 
-pickup_demand_forecaster = IrConvLstmDemandForecaster(
+pickup_demand_forecaster = IrConvLstmDemandPreForecaster(
     num_communities=N_COMMUNITIES,
     num_zones=N_ZONES,
     zone_community_map=ZONE_COMMUNITY_MAP,
-    model_path="/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/models/irregular_convolution_LSTM_pickup.pkl",
-    demand_data_path=PICK_UP_DEMAND_DATA_PATH,
+    demand_data_path=PICK_UP_DEMAND_FORECAST_DATA_PATH,
 )
 
 dropoff_demand_provider = DemandProviderImpl(
@@ -111,6 +112,9 @@ pickup_demand_provider = DemandProviderImpl(
     demand_data_path=PICK_UP_DEMAND_DATA_PATH,
 )
 
+torch.cuda.set_device(1)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 def save_trial_callback(study: Study, trial: FrozenTrial):
     csv_path = os.path.join(output_dir, f"{study_filename}.csv")
@@ -125,79 +129,77 @@ def save_trial_callback(study: Study, trial: FrozenTrial):
 
 
 def objective(trial: optuna.Trial):
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(trial.number % 4)
-
     # --- HYPERPARAMETERS ---
     if OPTIMIZE_REPLAY_BUFFER:
         RDC_REPLAY_BUFFER_CAPACITY = trial.suggest_int(
-            "rdc_replay_buffer_capacity", 5_000, 20_000, step=5000
+            "rdc_replay_buffer_capacity", 5_000, 10_000, step=2_500
         )
         RDC_REPLAY_BUFFER_ALPHA = trial.suggest_float(
-            "rdc_replay_buffer_alpha", 0.3, 0.8, step=0.1
+            "rdc_replay_buffer_alpha", 0.60, 0.80, step=0.05
         )
         RDC_REPLAY_BUFFER_BETA_START = trial.suggest_float(
-            "rdc_replay_buffer_beta_start", 0.2, 0.6, step=0.1
+            "rdc_replay_buffer_beta_start", 0.25, 0.50, step=0.05
         )
         RDC_REPLAY_BUFFER_BETA_FRAMES = trial.suggest_int(
-            "rdc_replay_buffer_beta_frames", 50_000, 200_000, step=50_000
+            "rdc_replay_buffer_beta_frames", 50_000, 150_000, step=25_000
         )
+        RDC_TAU = trial.suggest_float("rdc_tau", 0.005, 0.010, step=0.001)
     else:
-        RDC_REPLAY_BUFFER_CAPACITY = 10_000
-        RDC_REPLAY_BUFFER_ALPHA = 0.8
-        RDC_REPLAY_BUFFER_BETA_START = 0.3
-        RDC_REPLAY_BUFFER_BETA_FRAMES = 150_000
+        # 16,5000,0.6,0.5,50000,0.005,97.52000816810578
+        RDC_REPLAY_BUFFER_CAPACITY = 5_000
+        RDC_REPLAY_BUFFER_ALPHA = 0.6
+        RDC_REPLAY_BUFFER_BETA_START = 0.5
+        RDC_REPLAY_BUFFER_BETA_FRAMES = 50_000
+        RDC_TAU = 0.005
 
     if OPTIMIZE_ARCHITECTURE:
-        RDC_BATCH_SIZE = trial.suggest_categorical(
-            "rdc_batch_size", [64, 128, 256, 512]
-        )
-        RDC_HIDDEN_DIM = trial.suggest_categorical("rdc_hidden_dim", [64, 128, 256])
+        RDC_BATCH_SIZE = trial.suggest_categorical("rdc_batch_size", [256, 512])
+        RDC_HIDDEN_DIM = trial.suggest_categorical("rdc_hidden_dim", [128, 256])
     else:
+        # 2,256,256,96.65786108532586
         RDC_BATCH_SIZE = 256
         RDC_HIDDEN_DIM = 256
 
     if OPTIMIZE_LEARNING_RATE:
-        RDC_LR = trial.suggest_float("rdc_lr", 1e-6, 1e-4, log=True, step=1e-6)
-        RDC_LR_STEP_SIZE = trial.suggest_int("rdc_lr_step_size", 500, 2000, step=500)
-        RDC_LR_GAMMA = trial.suggest_float("rdc_lr_gamma", 0.1, 0.9, step=0.1)
-        RDC_GAMMA = trial.suggest_float("rdc_gamma", 0.9, 0.999, step=0.001)
+        RDC_LR = trial.suggest_float("rdc_lr", 1e-6, 1e-5, log=True)
+        RDC_LR_STEP_SIZE = trial.suggest_int("rdc_lr_step_size", 1500, 2000, step=250)
+        RDC_LR_GAMMA = trial.suggest_float("rdc_lr_gamma", 0.9, 1.0, step=0.05)
+        RDC_GAMMA = trial.suggest_float("rdc_gamma", 0.95, 0.99, step=0.01)
     else:
-        RDC_LR = 2.67e-6
-        RDC_LR_STEP_SIZE = 1500
-        RDC_LR_GAMMA = 0.9
-        RDC_GAMMA = 0.926
+        # 5.0345862337612e-06,1750,1.0,0.99,97.72724927461262
+        RDC_LR = 5.0345862337612e-06
+        RDC_LR_STEP_SIZE = 1750
+        RDC_LR_GAMMA = 0.99
+        RDC_GAMMA = 0.99
 
     RDC_EPSILON_START = 1.0
     if OPTIMIZE_EXPLORATION:
-        RDC_EPSILON_END = trial.suggest_float("rdc_epsilon_end", 0.01, 0.1, step=0.01)
+        RDC_EPSILON_END = trial.suggest_float("rdc_epsilon_end", 0.03, 0.05, step=0.005)
         RDC_EPSILON_DECAY = trial.suggest_float(
-            "rdc_epsilon_decay", 0.995, 0.9995, step=0.0005
+            "rdc_epsilon_decay", 0.998, 0.9999, step=0.0001
         )
     else:
-        RDC_EPSILON_END = 0.06
-        RDC_EPSILON_DECAY = 0.999
-
-    RDC_TAU = 0.001
-    # RDC_TAU = trial.suggest_float("rdc_tau", 0.001, 0.01, step=0.001)
-
-    RDC_STEP_DURATION = 60  # in minutes
+        # 27,0.04,0.9983,97.58201458861882
+        RDC_EPSILON_END = 0.04
+        RDC_EPSILON_DECAY = 0.9983
 
     if OPTIMIZE_REWARD_WEIGHTS:
         RDC_REWARD_WEIGHT_DEMAND = trial.suggest_float(
-            "rdc_reward_weight_demand", 0.5, 1.5, step=0.1
+            "rdc_reward_weight_demand", 1.2, 1.6, step=0.05
         )
         RDC_REWARD_WEIGHT_REBALANCING = trial.suggest_float(
-            "rdc_reward_weight_rebalancing", 0.5, 1.5, step=0.1
+            "rdc_reward_weight_rebalancing", 0.90, 1.20, step=0.05
         )
         RDC_REWARD_WEIGHT_GINI = trial.suggest_float(
-            "rdc_reward_weight_gini", 0.1, 0.5, step=0.05
+            "rdc_reward_weight_gini", 0.05, 0.10, step=0.01
         )
     else:
-        RDC_REWARD_WEIGHT_DEMAND = 1.1
-        RDC_REWARD_WEIGHT_REBALANCING = 1.1
-        RDC_REWARD_WEIGHT_GINI = 0.1
+        # 26,1.4,1.05,0.07,98.27922198476875
+        RDC_REWARD_WEIGHT_DEMAND = 1.4
+        RDC_REWARD_WEIGHT_REBALANCING = 1.05
+        RDC_REWARD_WEIGHT_GINI = 0.07
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    RDC_STEP_DURATION = 60  # in minutes
 
     train_envs = EscooterRDCEnv(
         num_communities=N_COMMUNITIES,
