@@ -51,19 +51,19 @@ REWARD_WEIGHT_GINI = 0.25
 
 UIC_POLICY = "MultiInputPolicy"
 UIC_N_STEPS = 512
-UIC_LEARNING_RATE = 3e-4
-UIC_GAMMA = 0.938
+UIC_LEARNING_RATE = 1.092e-06
+UIC_GAMMA = 0.918
 UIC_GAE_LAMBDA = 0.95
-UIC_CLIP_RANGE = 0.12
-UIC_ENT_COEF = 0.07
+UIC_CLIP_RANGE = 0.13
+UIC_ENT_COEF = 0.00078
 UIC_BATCH_SIZE = 32
 UIC_VERBOSE = 1
 UIC_POLICY_KWARGS = {
-    "net_arch": dict(pi=[128, 128, 128], vf=[128, 128, 128]),
+    "net_arch": dict(pi=[256, 256, 256], vf=[256, 256, 256]),
     "activation_fn": torch.nn.Tanh,
 }
 UIC_VF_COEF = 0.6
-UIC_TARGET_KL = 0.03
+UIC_TARGET_KL = 0.02
 UIC_TENSORBOARD_LOG = "rl_framework/runs/UIC/"
 
 

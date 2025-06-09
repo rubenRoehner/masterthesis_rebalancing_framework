@@ -18,10 +18,10 @@ from demand_forecasting.IrConv_LSTM_pre_forecaster import (
 from demand_provider.demand_provider_impl import DemandProviderImpl
 
 
-OPTIMIZE_REPLAY_BUFFER = False
-OPTIMIZE_ARCHITECTURE = False
-OPTIMIZE_LEARNING_RATE = False
-OPTIMIZE_EXPLORATION = False
+OPTIMIZE_REPLAY_BUFFER = True
+OPTIMIZE_ARCHITECTURE = True
+OPTIMIZE_LEARNING_RATE = True
+OPTIMIZE_EXPLORATION = True
 OPTIMIZE_REWARD_WEIGHTS = True
 
 FLAG_LABELS = {
@@ -37,6 +37,8 @@ active_flags = [
 ]
 if not active_flags:
     study_label = "default"
+elif len(active_flags) == len(FLAG_LABELS):
+    study_label = "final_joint"
 else:
     study_label = active_flags[0]
 
@@ -44,7 +46,7 @@ timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
 study_filename = f"rdc_ho_{study_label}_{timestamp}"
 
-N_TRIALS = 30
+N_TRIALS = 100
 
 # global parameters
 FLEET_SIZE = 500
@@ -112,7 +114,7 @@ pickup_demand_provider = DemandProviderImpl(
     demand_data_path=PICK_UP_DEMAND_DATA_PATH,
 )
 
-torch.cuda.set_device(1)
+torch.cuda.set_device(3)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -316,7 +318,6 @@ if __name__ == "__main__":
     study = optuna.create_study(
         direction="maximize",
         sampler=optuna.samplers.TPESampler(),
-        pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=50),
         study_name="escooter_rdc_hyperparameter_optimization",
     )
 
