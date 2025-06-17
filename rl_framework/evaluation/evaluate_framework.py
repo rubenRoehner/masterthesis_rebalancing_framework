@@ -1,3 +1,11 @@
+"""
+evaluate_framework.py
+
+Main evaluation script for the Hierarchical Reinforcement Learning framework.
+This script loads trained RDC and UIC agents and evaluates their coordinated performance
+in managing e-scooter fleet distribution across multiple communities.
+"""
+
 from demand_forecasting.IrConv_LSTM_pre_forecaster import (
     IrConvLstmDemandPreForecaster,
 )
@@ -6,7 +14,7 @@ from regional_distribution_coordinator.regional_distribution_coordinator import 
 )
 from training_loop import RDC_ACTION_VALUES, RDC_HIDDEN_DIM, RDC_FEATURES_PER_COMMUNITY
 from demand_provider.demand_provider_impl import DemandProviderImpl
-from hrl_framework_evaluator import HRLFrameworkEvaluator
+from rl_framework.evaluation.hrl_framework_evaluator import HRLFrameworkEvaluator
 from stable_baselines3 import PPO
 import torch
 import pandas as pd
@@ -64,7 +72,22 @@ torch.cuda.set_device(2)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def run_evaluation():
+def run_evaluation() -> None:
+    """Run complete evaluation of the HRL framework.
+
+    Loads trained RDC and UIC agents, sets up the evaluation environment,
+    and measures the coordinated performance of both agent types working together
+    to manage e-scooter fleet distribution and user incentives.
+
+    Args:
+        None
+
+    Returns:
+        None
+
+    Raises:
+        None
+    """
     rdc_agent_network: OrderedDict = torch.load(RDC_AGENT_PATH, map_location=device)
     uic_agents = [PPO.load(path, device=device) for path in UIC_AGENT_PATHS]
 

@@ -1,3 +1,12 @@
+"""
+hrl_framework_evaluator.py
+
+Hierarchical Reinforcement Learning Framework Evaluator.
+This module provides evaluation capabilities for the complete HRL framework,
+coordinating both Regional Distribution Coordinator (RDC) and User Incentive Coordinator (UIC) agents
+to assess overall system performance in e-scooter fleet management.
+"""
+
 import numpy as np
 import pandas as pd
 import torch
@@ -14,6 +23,13 @@ from user_incentive_coordinator.escooter_uic_env import EscooterUICEnv
 
 
 class HRLFrameworkEvaluator:
+    """Evaluator for the Hierarchical Reinforcement Learning framework.
+
+    This class coordinates the evaluation of both RDC and UIC agents working together
+    to manage e-scooter fleet distribution across multiple communities, measuring
+    overall system performance and demand satisfaction.
+    """
+
     def __init__(
         self,
         rdc_agent: RegionalDistributionCoordinator,
@@ -32,7 +48,33 @@ class HRLFrameworkEvaluator:
         user_willingness_fn: Callable[[float], float],
         zone_neighbor_map: dict[str, list[str]],
         device: torch.device,
-    ):
+    ) -> None:
+        """Initialize the HRL Framework Evaluator.
+
+        Args:
+            rdc_agent: trained Regional Distribution Coordinator agent
+            uic_agents: list of trained User Incentive Coordinator agents for each community
+            zone_community_map: DataFrame mapping zones to communities
+            community_index_map: mapping from community IDs to indices
+            zone_index_map: mapping from zone IDs to indices
+            pickup_demand_forecaster: forecaster for pickup demand patterns
+            dropoff_demand_forecaster: forecaster for dropoff demand patterns
+            pickup_demand_provider: provider for actual pickup demand data
+            dropoff_demand_provider: provider for actual dropoff demand data
+            fleet_size: total number of vehicles in the fleet
+            start_time: evaluation start time
+            max_steps: maximum number of evaluation steps
+            step_duration: duration of each evaluation step
+            user_willingness_fn: function mapping incentive to user compliance probability
+            zone_neighbor_map: mapping from zone IDs to neighbor zone IDs
+            device: PyTorch device for tensor operations
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
         self.rdc_agent = rdc_agent
         self.uic_agents = uic_agents
         self.zone_community_map = zone_community_map
@@ -78,6 +120,17 @@ class HRLFrameworkEvaluator:
         self.device = device
 
     def get_vehicle_counts_per_community(self) -> np.ndarray:
+        """Get the total number of vehicles in each community.
+
+        Args:
+            None
+
+        Returns:
+            np.ndarray: array of vehicle counts per community
+
+        Raises:
+            None
+        """
         vehicle_counts_per_community = np.zeros(self.n_communities, dtype=int)
         for i in range(self.n_communities):
             vehicle_counts_per_community[i] = self.global_vehicle_counts[
@@ -86,6 +139,17 @@ class HRLFrameworkEvaluator:
         return vehicle_counts_per_community
 
     def get_rdc_state_observation(self) -> torch.Tensor:
+        """Get the current state observation for the RDC agent.
+
+        Args:
+            None
+
+        Returns:
+            torch.Tensor: state observation for regional distribution coordination
+
+        Raises:
+            None
+        """
         observation = []
         current_pickup_demand_forecast = (
             self.pickup_demand_forecaster.predict_demand_per_community(
@@ -114,6 +178,17 @@ class HRLFrameworkEvaluator:
         return torch.tensor(observation, dtype=torch.float32, device=self.device)
 
     def get_uic_state_observation(self, community_index: int) -> Dict[str, np.ndarray]:
+        """Get the current state observation for a specific UIC agent.
+
+        Args:
+            community_index: index of the community for UIC observation
+
+        Returns:
+            Dict[str, np.ndarray]: state observation for user incentive coordination
+
+        Raises:
+            None
+        """
         zones = self.zones_in_community[community_index]
         vehicle_counts = self.global_vehicle_counts[zones].astype(int).copy()
 
@@ -137,9 +212,21 @@ class HRLFrameworkEvaluator:
             "current_vehicle_counts": vehicle_counts,
         }
 
-    def evaluate(
-        self,
-    ) -> Dict:
+    def evaluate(self) -> Dict:
+        """Evaluate the complete HRL framework performance.
+
+        Runs the evaluation episode with both RDC and UIC agents working together,
+        measuring demand satisfaction and overall system performance.
+
+        Args:
+            None
+
+        Returns:
+            Dict: evaluation results including mean satisfied demand ratio
+
+        Raises:
+            None
+        """
         satisfied_ratio = []
         while self.current_step < self.max_steps:
             # --- RDC operator based rebalancing ---
