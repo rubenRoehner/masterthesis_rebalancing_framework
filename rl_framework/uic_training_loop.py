@@ -1,3 +1,11 @@
+"""
+uic_training_loop.py
+
+Training loop for User Incentive Coordinator (UIC) agents.
+This script trains individual UIC agents for each community using PPO algorithm,
+with each agent learning to provide optimal incentives for e-scooter rebalancing within their community.
+"""
+
 from datetime import datetime, timedelta
 import torch
 import pandas as pd
@@ -69,7 +77,17 @@ UIC_TENSORBOARD_LOG = "rl_framework/runs/UIC/"
 
 @staticmethod
 def USER_WILLINGNESS_FN(incentive: float) -> float:
-    """ """
+    """User willingness function mapping incentive level to compliance probability.
+
+    Args:
+        incentive: incentive level (0-1 normalized)
+
+    Returns:
+        float: probability that users will comply with the incentive
+
+    Raises:
+        None
+    """
     return 0.4 * incentive
 
 
@@ -86,6 +104,28 @@ def make_env(
     community_id: str,
     seed: int = 0,
 ):
+    """Create environment factory function for parallel training.
+
+    Args:
+        rank: environment rank for parallel execution
+        n_zones: number of zones in the community
+        dropoff_demand_forecaster: forecaster for dropoff demand patterns
+        pickup_demand_forecaster: forecaster for pickup demand patterns
+        dropoff_demand_provider: provider for actual dropoff demand data
+        pickup_demand_provider: provider for actual pickup demand data
+        device: PyTorch device for tensor operations
+        zone_neighbor_map: mapping from zone IDs to neighbor zone IDs
+        zone_index_map: mapping from zone IDs to indices
+        community_id: ID of the community for this environment
+        seed: base random seed for environment
+
+    Returns:
+        callable: environment factory function
+
+    Raises:
+        None
+    """
+
     def _init():
         env: gym.Env = EscooterUICEnv(
             community_id=community_id,
@@ -113,7 +153,18 @@ def make_env(
     return _init
 
 
-def train_uic(community_id: str):
+def train_uic(community_id: str) -> None:
+    """Train a UIC agent for a specific community.
+
+    Args:
+        community_id: ID of the community to train the UIC agent for
+
+    Returns:
+        None
+
+    Raises:
+        None
+    """
 
     # [grid_index, community_id]
     ZONE_COMMUNITY_MAP: pd.DataFrame = pd.read_pickle(
@@ -277,7 +328,18 @@ def train_uic(community_id: str):
     print("Training completed.")
 
 
-def train_all_uics():
+def train_all_uics() -> None:
+    """Train UIC agents for all communities sequentially.
+
+    Args:
+        None
+
+    Returns:
+        None
+
+    Raises:
+        None
+    """
     for community_id in COMMUNITY_IDS:
         print(f"Training UIC for community {community_id}...")
         train_uic(community_id)

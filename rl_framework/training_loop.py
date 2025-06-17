@@ -1,3 +1,11 @@
+"""
+training_loop.py
+
+Training loop for Regional Distribution Coordinator (RDC) agent.
+This script trains the multi-head DQN-based RDC agent using prioritized experience replay
+for coordinating e-scooter fleet distribution across multiple communities.
+"""
+
 from datetime import datetime, timedelta
 from torch.utils.tensorboard.writer import SummaryWriter
 import torch
@@ -107,7 +115,21 @@ pickup_demand_provider = DemandProviderImpl(
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def main():
+def main() -> None:
+    """Main training function for the Regional Distribution Coordinator.
+
+    Sets up the RDC environment and agent, then runs the training loop
+    with TensorBoard logging for monitoring training progress and performance metrics.
+
+    Args:
+        None
+
+    Returns:
+        None
+
+    Raises:
+        None
+    """
 
     rdc_env = EscooterRDCEnv(
         num_communities=N_COMMUNITIES,
@@ -237,7 +259,7 @@ def main():
 
         # Log  vehicles rebalanced
         writer.add_scalar(
-            "VehiclesRebalanced/Episode", episode_vehicles_rebalanced, episode
+            "VehiclesReBalanced/Episode", episode_vehicles_rebalanced, episode
         )
 
         # Log actions per head as histogram
