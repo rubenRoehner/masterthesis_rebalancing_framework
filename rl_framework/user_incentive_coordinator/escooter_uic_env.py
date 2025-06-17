@@ -1,3 +1,11 @@
+"""
+escooter_uic_env.py
+
+E-scooter User Incentive Coordinator Environment.
+This gymnasium environment simulates user incentive-based e-scooter rebalancing within a single community,
+where the agent learns to provide incentives that influence user dropoff behavior.
+"""
+
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
@@ -11,13 +19,20 @@ from demand_provider.demand_provider import DemandProvider
 
 
 class EscooterUICEnv(gym.Env):
+    """Gymnasium environment for e-scooter user incentive coordination.
+
+    This environment simulates incentive-based rebalancing within a single community,
+    where the agent provides incentives to users to influence their dropoff locations,
+    thereby achieving better fleet distribution without direct vehicle movement.
+    """
+
     def __init__(
         self,
         community_id: str,
         n_zones: int,
         fleet_size: int,
-        zone_neighbor_map: dict[str, List[str]],  # str -> List[str]
-        zone_index_map: dict[str, int],  # str -> int
+        zone_neighbor_map: dict[str, List[str]],
+        zone_index_map: dict[str, int],
         user_willingness_fn: Callable[[float], float],
         pickup_demand_forecaster: DemandForecaster,
         dropoff_demand_forecaster: DemandForecaster,
@@ -30,24 +45,33 @@ class EscooterUICEnv(gym.Env):
         reward_weight_rebalancing: float,
         reward_weight_gini: float,
         device: torch.device,
-    ):
-        """
+    ) -> None:
+        """Initialize the E-scooter User Incentive Coordinator environment.
+
         Args:
-            community_id (str): The ID of the community.
-            n_zones (int): The number of zones in the community.
-            fleet_size (int): The size of the fleet.
-            pickup_demand_forecaster (DemandForecaster): The demand forecaster for pickup.
-            dropoff_demand_forecaster (DemandForecaster): The demand forecaster for dropoff.
-            pickup_demand_provider (DemandProvider): The demand provider for pickup.
-            dropoff_demand_provider (DemandProvider): The demand provider for dropoff.
-            max_incentive (float): The maximum incentive that can be offered.
-            incentive_levels (int): The number of incentive levels.
-            max_steps (int): The maximum number of steps in an episode.
-            start_time (datetime): The start time of the simulation.
-            step_duration (timedelta): The duration of each step in the simulation.
-            reward_weight_demand (float): The weight for the demand satisfaction in the reward.
-            reward_weight_rebalancing (float): The weight for the rebalancing costs in the reward.
-            reward_weight_gini (float): The weight for the Gini coefficient in the reward.
+            community_id: ID of the community this environment manages
+            n_zones: number of zones within the community
+            fleet_size: total number of vehicles in the community fleet
+            zone_neighbor_map: mapping from zone IDs to their neighbor zone IDs
+            zone_index_map: mapping from zone IDs to their indices
+            user_willingness_fn: function mapping incentive level to user compliance probability
+            pickup_demand_forecaster: forecaster for pickup demand patterns
+            dropoff_demand_forecaster: forecaster for dropoff demand patterns
+            pickup_demand_provider: provider for actual pickup demand data
+            dropoff_demand_provider: provider for actual dropoff demand data
+            max_steps: maximum number of steps per episode
+            start_time: simulation start time
+            step_duration: duration of each simulation step
+            reward_weight_demand: weight for demand satisfaction in reward calculation
+            reward_weight_rebalancing: weight for rebalancing efficiency in reward calculation
+            reward_weight_gini: weight for distribution equality in reward calculation
+            device: PyTorch device for tensor operations
+
+        Returns:
+            None
+
+        Raises:
+            None
         """
         super(EscooterUICEnv, self).__init__()
         self.device = device
@@ -59,9 +83,8 @@ class EscooterUICEnv(gym.Env):
         self.zone_index_map = zone_index_map
         self.user_willingness_fn = user_willingness_fn
 
-        # List of all in-community zone IDs, in a consistent order
         self.zone_ids = list(self.zone_index_map.keys())
-        # Map each zone ID to its local integer index 0…n_zones-1
+
         self.zone_id_to_local = {
             zone_id: idx for idx, zone_id in enumerate(self.zone_ids)
         }
@@ -108,7 +131,18 @@ class EscooterUICEnv(gym.Env):
         )
         self.demand_trace_length = len(self.full_time_index_available)
 
-    def get_state_observation(self):
+    def get_state_observation(self) -> dict:
+        """Get the current state observation for the agent.
+
+        Args:
+            None
+
+        Returns:
+            dict: observation containing demand forecasts and vehicle counts
+
+        Raises:
+            None
+        """
         return {
             "pickup_demand": self.current_pickup_demand_forecast,
             "dropoff_demand": self.current_dropoff_demand_forecast,
@@ -116,10 +150,32 @@ class EscooterUICEnv(gym.Env):
         }
 
     def calculate_current_time(self) -> datetime:
+        """Calculate the current simulation time based on step count and offset.
+
+        Args:
+            None
+
+        Returns:
+            datetime: current simulation time
+
+        Raises:
+            None
+        """
         idx = (self.start_offset + self.current_step) % self.demand_trace_length
         return self.full_time_index_available[idx]
 
-    def generate_demand_forecast(self, current_time: datetime):
+    def generate_demand_forecast(self, current_time: datetime) -> None:
+        """Generate demand forecasts for the current time within the community.
+
+        Args:
+            current_time: current simulation time
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
         time_of_day = current_time.hour
         day = current_time.day
         month = current_time.month
@@ -147,6 +203,20 @@ class EscooterUICEnv(gym.Env):
         total_vehicles_rebalanced: int,
         gini_coefficient: float,
     ) -> float:
+        """Calculate the multi-objective reward for the current step.
+
+        Args:
+            total_satisfied_demand: number of pickup requests satisfied
+            offered_demand: total number of pickup requests
+            total_vehicles_rebalanced: number of vehicles moved through incentives
+            gini_coefficient: Gini coefficient of vehicle distribution
+
+        Returns:
+            float: calculated reward value between 0 and 1
+
+        Raises:
+            None
+        """
         norm_satisified_demand = (
             total_satisfied_demand / offered_demand if offered_demand > 0 else 1
         )
@@ -169,6 +239,17 @@ class EscooterUICEnv(gym.Env):
         return float(np.clip(reward, 0, 1))
 
     def calculate_gini_coefficient(self) -> float:
+        """Calculate the Gini coefficient of vehicle distribution across zones.
+
+        Args:
+            None
+
+        Returns:
+            float: Gini coefficient (0 = perfect equality, 1 = maximum inequality)
+
+        Raises:
+            None
+        """
         array = np.array(self.current_vehicle_counts, dtype=float)
         size = array.size
         mean = array.mean()
@@ -189,9 +270,24 @@ class EscooterUICEnv(gym.Env):
         zone_neighbor_map: dict[str, List[str]],
         user_willingness_fn: Callable[[float], float],
     ) -> tuple[np.ndarray, int]:
-        """
-        Rebalance vehicles by shifting dropoff_demand from each zone to the
-        in-community neighbor with the highest incentive.
+        """Handle user incentives to influence dropoff behavior.
+
+        Rebalances vehicles by shifting dropoff demand from each zone to the
+        neighboring zone with the highest incentive, based on user willingness.
+
+        Args:
+            action: incentive levels for each zone (0-1 normalized)
+            dropoff_demand: current dropoff demand per zone
+            zone_ids: list of zone IDs in consistent order
+            zone_id_to_local: mapping from zone IDs to local indices
+            zone_neighbor_map: mapping from zone IDs to neighbor zone IDs
+            user_willingness_fn: function mapping incentive to compliance probability
+
+        Returns:
+            tuple: (updated_dropoff_demand, total_vehicles_rebalanced)
+
+        Raises:
+            ValueError: if dropoff demand sum changes unexpectedly
         """
         total_vehicles_rebalanced = 0
         initial_dropoff = dropoff_demand.copy()
@@ -232,7 +328,20 @@ class EscooterUICEnv(gym.Env):
         dropoff_demand: np.ndarray,
         current_vehicle_counts: np.ndarray,
     ) -> tuple[np.ndarray, int]:
-        """ """
+        """Update vehicle counts based on pickup and dropoff demand.
+
+        Args:
+            n_zones: number of zones in the community
+            pickup_demand: pickup demand per zone
+            dropoff_demand: dropoff demand per zone (after incentive influence)
+            current_vehicle_counts: current vehicle counts per zone
+
+        Returns:
+            tuple: (updated_vehicle_counts, total_satisfied_demand)
+
+        Raises:
+            None
+        """
         total_satisfied_demand = 0
         for i in range(n_zones):
             updated_vehicle_count = current_vehicle_counts[i] + dropoff_demand[i]
@@ -245,10 +354,20 @@ class EscooterUICEnv(gym.Env):
             current_vehicle_counts[i] = updated_vehicle_count
         return current_vehicle_counts, total_satisfied_demand
 
-    def step(self, action: np.ndarray):
+    def step(self, action: np.ndarray) -> tuple[dict, float, bool, bool, dict]:
+        """Execute one step in the environment.
+
+        Args:
+            action: incentive levels for each zone (0-1 normalized)
+
+        Returns:
+            tuple: (observation, reward, terminated, truncated, info)
+
+        Raises:
+            None
+        """
         current_time = self.calculate_current_time()
 
-        # --- simulate demand based on historical data ---
         pickup_demand = self.pickup_demand_provider.get_demand_per_zone_community(
             time_of_day=current_time.hour,
             day=current_time.day,
@@ -287,7 +406,6 @@ class EscooterUICEnv(gym.Env):
             gini_coefficient=self.calculate_gini_coefficient(),
         )
 
-        # --- Prepare next state ---
         self.current_step += 1
         self.generate_demand_forecast(current_time=self.calculate_current_time())
 
@@ -301,20 +419,42 @@ class EscooterUICEnv(gym.Env):
 
         return next_observation, reward, terminated, truncated, info
 
-    def initialize_vehicle_counts(self):
-        # Initialize vehicle counts based on the fleet size and number of communities
-        # Distribute the fleet size evenly across the zones
+    def initialize_vehicle_counts(self) -> None:
+        """Initialize vehicle counts evenly across all zones in the community.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
+
         self.current_vehicle_counts = np.full(
             self.n_zones,
             self.fleet_size // self.n_zones,
             dtype=int,
         )
-        # Distribute the remaining vehicles to the first few zones
+
         remaining_vehicles = self.fleet_size % self.n_zones
         for i in range(remaining_vehicles):
             self.current_vehicle_counts[i] += 1
 
-    def reset(self, *, seed=None, options=None):
+    def reset(self, *, seed=None, options=None) -> tuple[dict, dict]:
+        """Reset the environment to a new episode.
+
+        Args:
+            seed: random seed for the episode
+            options: additional reset options
+
+        Returns:
+            tuple: (initial_observation, info)
+
+        Raises:
+            None
+        """
         super().reset(seed=seed, options=options)
 
         self.start_offset = self.np_random.integers(0, self.demand_trace_length)
@@ -327,9 +467,31 @@ class EscooterUICEnv(gym.Env):
 
         return self.get_state_observation(), info
 
-    def render(self):
+    def render(self) -> None:
+        """Render the current environment state.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
         print("Rendering the environment state.")
         print(f"Step: {self.current_step}")
 
-    def close(self):
+    def close(self) -> None:
+        """Close the environment.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
         print("Closing the environment.")
