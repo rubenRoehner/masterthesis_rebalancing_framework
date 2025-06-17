@@ -1,3 +1,11 @@
+"""
+hyperparameter_optimization_uic.py
+
+Hyperparameter optimization for User Incentive Coordinator (UIC).
+This script uses Optuna to perform Bayesian optimization of hyperparameters
+for the PPO-based User Incentive Coordinator agent in e-scooter rebalancing.
+"""
+
 from datetime import datetime, timedelta
 import torch
 import pandas as pd
@@ -132,7 +140,19 @@ torch.cuda.set_device(2)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def save_trial_callback(study: Study, trial: FrozenTrial):
+def save_trial_callback(study: Study, trial: FrozenTrial) -> None:
+    """Save trial results to CSV file after each trial completion.
+
+    Args:
+        study: Optuna study object
+        trial: completed trial object with parameters and results
+
+    Returns:
+        None
+
+    Raises:
+        None
+    """
     csv_path = os.path.join(output_dir, f"{study_filename}.csv")
     header = ["trial_number"] + list(trial.params.keys()) + ["value"]
     row = [trial.number] + list(trial.params.values()) + [trial.value]
@@ -156,6 +176,27 @@ def make_env(
     zone_index_map: dict[str, int],
     seed: int = 0,
 ):
+    """Create environment factory function for parallel training.
+
+    Args:
+        rank: environment rank for parallel execution
+        n_zones: number of zones in the community
+        dropoff_demand_forecaster: forecaster for dropoff demand patterns
+        pickup_demand_forecaster: forecaster for pickup demand patterns
+        dropoff_demand_provider: provider for actual dropoff demand data
+        pickup_demand_provider: provider for actual pickup demand data
+        device: PyTorch device for tensor operations
+        zone_neighbor_map: mapping from zone IDs to neighbor zone IDs
+        zone_index_map: mapping from zone IDs to indices
+        seed: base random seed for environment
+
+    Returns:
+        callable: environment factory function
+
+    Raises:
+        None
+    """
+
     def _init():
         env: gym.Env = EscooterUICEnv(
             community_id=COMMUNITY_ID,
@@ -184,6 +225,20 @@ def make_env(
 
 
 def objective(trial: optuna.Trial) -> float:
+    """Optuna objective function for hyperparameter optimization.
+
+    Defines the search space for UIC hyperparameters and evaluates
+    agent performance using the suggested parameter combination.
+
+    Args:
+        trial: Optuna trial object for suggesting hyperparameters
+
+    Returns:
+        float: best mean reward achieved during evaluation
+
+    Raises:
+        None
+    """
     learning_rate = trial.suggest_float("learning_rate", 1e-6, 2e-4, log=True)
     n_steps = trial.suggest_categorical("n_steps", [256, 512])
     batch_size = trial.suggest_categorical("batch_size", [32, 64])

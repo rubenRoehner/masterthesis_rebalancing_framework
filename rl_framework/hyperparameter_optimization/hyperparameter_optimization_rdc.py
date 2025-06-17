@@ -1,3 +1,11 @@
+"""
+hyperparameter_optimization_rdc.py
+
+Hyperparameter optimization for Regional Distribution Coordinator (RDC).
+This script uses Optuna to perform Bayesian optimization of hyperparameters
+for the multi-head DQN-based Regional Distribution Coordinator agent in e-scooter fleet management.
+"""
+
 from datetime import datetime, timedelta
 import torch
 import pandas as pd
@@ -118,7 +126,19 @@ torch.cuda.set_device(3)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def save_trial_callback(study: Study, trial: FrozenTrial):
+def save_trial_callback(study: Study, trial: FrozenTrial) -> None:
+    """Save trial results to CSV file after each trial completion.
+
+    Args:
+        study: Optuna study object
+        trial: completed trial object with parameters and results
+
+    Returns:
+        None
+
+    Raises:
+        None
+    """
     csv_path = os.path.join(output_dir, f"{study_filename}.csv")
     header = ["trial_number"] + list(trial.params.keys()) + ["value"]
     row = [trial.number] + list(trial.params.values()) + [trial.value]
@@ -130,7 +150,23 @@ def save_trial_callback(study: Study, trial: FrozenTrial):
         writer.writerow(row)
 
 
-def objective(trial: optuna.Trial):
+def objective(trial: optuna.Trial) -> float:
+    """Optuna objective function for hyperparameter optimization.
+
+    Defines the search space for RDC hyperparameters based on optimization flags
+    and evaluates agent performance using the suggested parameter combination.
+    The search space includes replay buffer parameters, network architecture,
+    learning rates, exploration parameters, and reward weights.
+
+    Args:
+        trial: Optuna trial object for suggesting hyperparameters
+
+    Returns:
+        float: mean reward achieved during evaluation episodes
+
+    Raises:
+        None
+    """
     # --- HYPERPARAMETERS ---
     if OPTIMIZE_REPLAY_BUFFER:
         RDC_REPLAY_BUFFER_CAPACITY = trial.suggest_int(
