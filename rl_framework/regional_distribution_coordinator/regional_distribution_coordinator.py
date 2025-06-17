@@ -1,3 +1,10 @@
+"""
+regional_distribution_coordinator.py
+
+Defines the RegionalDistributionCoordinator class.
+This class implements a multi-head DQN agent with prioritized experience replay for regional e-scooter distribution coordination.
+"""
+
 from regional_distribution_coordinator.multi_head_dqn import MultiHeadDQN
 from regional_distribution_coordinator.replay_buffer import ReplayBuffer
 import torch
@@ -7,6 +14,12 @@ from torch.optim.lr_scheduler import StepLR
 
 
 class RegionalDistributionCoordinator:
+    """A multi-head DQN agent for coordinating e-scooter distribution across multiple communities.
+
+    This agent uses separate Q-value heads for each community while sharing feature representations,
+    enabling coordinated decision-making across regions with prioritized experience replay.
+    """
+
     def __init__(
         self,
         state_dim,
@@ -27,9 +40,34 @@ class RegionalDistributionCoordinator:
         replay_buffer_alpha=0.6,
         replay_buffer_beta_start=0.4,
         replay_buffer_beta_frames=50_000,
-    ):
-        """
-        RegionalDistributionCoordinator constructor.
+    ) -> None:
+        """Initialize the RegionalDistributionCoordinator.
+
+        Args:
+            state_dim: dimension of the state space
+            num_communities: number of communities/regions to coordinate
+            action_values: list of possible action values for vehicle rebalancing
+            device: PyTorch device for computations
+            replay_buffer_capacity: maximum number of experiences to store
+            learning_rate: learning rate for the optimizer
+            gamma: discount factor for future rewards
+            epsilon_start: initial exploration rate
+            epsilon_end: minimum exploration rate
+            epsilon_decay: decay rate for epsilon
+            batch_size: number of experiences to sample per training step
+            tau: soft update parameter for target network
+            hidden_dim: dimension of hidden layers in the neural network
+            lr_step_size: step size for learning rate scheduler
+            lr_gamma: gamma for learning rate scheduler
+            replay_buffer_alpha: prioritization exponent for replay buffer
+            replay_buffer_beta_start: initial importance sampling exponent
+            replay_buffer_beta_frames: frames over which to anneal beta to 1.0
+
+        Returns:
+            None
+
+        Raises:
+            None
         """
         self.state_dim = state_dim
         self.num_communities = num_communities
@@ -88,10 +126,16 @@ class RegionalDistributionCoordinator:
         )
 
     def select_action(self, state: torch.Tensor) -> List[int]:
-        """
-        Select an action based on the current state using epsilon-greedy policy
-        :param state: The current state of the environment (tensor)
-        :return: The selected action index for each community
+        """Select actions for all communities using epsilon-greedy policy.
+
+        Args:
+            state: current state of the environment as a torch.Tensor
+
+        Returns:
+            List[int]: action indices for each community
+
+        Raises:
+            None
         """
         state_tensor = state.unsqueeze(0)
 
@@ -111,10 +155,32 @@ class RegionalDistributionCoordinator:
 
         return action_indices.tolist()
 
-    def update_target_network(self):
+    def update_target_network(self) -> None:
+        """Hard update of the target network parameters.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
         self.target_network.load_state_dict(self.policy_network.state_dict())
 
-    def soft_update(self):
+    def soft_update(self) -> None:
+        """Soft update of the target network parameters using tau.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
         """
         soft update of the target network parameters
         """
@@ -125,7 +191,18 @@ class RegionalDistributionCoordinator:
                 self.tau * pol_param.data + (1.0 - self.tau) * targ_param.data
             )
 
-    def update_epsilon(self):
+    def update_epsilon(self) -> None:
+        """Update epsilon using exponential decay.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
         """
         Epsilon decay function.
         """
@@ -141,13 +218,37 @@ class RegionalDistributionCoordinator:
         reward: float,
         next_state: torch.Tensor,
         done: bool,
-    ):
+    ) -> None:
+        """Store an experience in the replay buffer.
+
+        Args:
+            state: current state as a torch.Tensor
+            action_indices: list of action indices taken
+            reward: reward received for the actions
+            next_state: next state as a torch.Tensor
+            done: boolean indicating if the episode has ended
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
         self.replay_buffer.push(state, action_indices, reward, next_state, done)
 
-    def anneal_beta(self):
-        """
-        Linearly increase beta from beta_start → 1.0 over beta_frames steps.
-        After that, beta stays at 1.0.
+    def anneal_beta(self) -> None:
+        """Linearly increase beta from beta_start to 1.0 over beta_frames steps.
+
+        After beta_frames steps, beta stays at 1.0.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None
         """
         fraction = min(
             float(self.replay_buffer_frames_idx) / self.replay_buffer_beta_frames, 1.0
@@ -157,7 +258,20 @@ class RegionalDistributionCoordinator:
             1.0 - self.replay_buffer_beta_start
         )
 
-    def train(self):
+    def train(self) -> tuple[float, torch.Tensor] | None:
+        """Train the agent using a batch of experiences from the replay buffer.
+
+        Uses Double DQN with prioritized experience replay and multi-head architecture.
+
+        Args:
+            None
+
+        Returns:
+            tuple or None: (loss, td_errors) if training occurred, None otherwise
+
+        Raises:
+            None
+        """
         if len(self.replay_buffer) < self.batch_size:
             return None
 
@@ -269,7 +383,18 @@ class RegionalDistributionCoordinator:
 
         return loss.item(), td_per_head.detach()
 
-    def set_evluation_mode(self, state_dict):
+    def set_evluation_mode(self, state_dict) -> None:
+        """Set the agent to evaluation mode with given state dict.
+
+        Args:
+            state_dict: state dictionary to load into networks
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
         """ """
         self.policy_network.load_state_dict(state_dict)
         self.target_network.load_state_dict(state_dict)

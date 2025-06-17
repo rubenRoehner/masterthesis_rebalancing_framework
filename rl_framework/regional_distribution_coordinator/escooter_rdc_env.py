@@ -1,3 +1,11 @@
+"""
+escooter_rdc_env.py
+
+E-scooter Regional Distribution Coordinator Environment.
+This gymnasium environment simulates e-scooter fleet management across multiple communities,
+supporting demand forecasting, vehicle rebalancing, and reward calculation based on service quality.
+"""
+
 import gymnasium as gym
 import numpy as np
 import pandas as pd
@@ -10,6 +18,12 @@ from demand_provider.demand_provider import DemandProvider
 
 
 class EscooterRDCEnv(gym.Env):
+    """Gymnasium environment for e-scooter regional distribution coordination.
+
+    This environment simulates the management of an e-scooter fleet across multiple zones and communities,
+    with demand patterns, vehicle rebalancing actions, and multi-objective reward calculation.
+    """
+
     def __init__(
         self,
         num_communities: int,
@@ -30,8 +44,35 @@ class EscooterRDCEnv(gym.Env):
         reward_weight_demand: float = 1.0,
         reward_weight_rebalancing: float = -0.5,
         reward_weight_gini: float = -0.1,
-        seed: int = 0,
-    ):
+    ) -> None:
+        """Initialize the E-scooter RDC environment.
+
+        Args:
+            num_communities: number of communities in the environment
+            n_zones: total number of zones across all communities
+            action_values: list of possible rebalancing action values
+            max_steps: maximum number of steps per episode
+            fleet_size: total number of vehicles in the fleet
+            zone_community_map: DataFrame mapping zones to communities
+            zone_index_map: mapping from zone IDs to indices
+            community_index_map: mapping from community IDs to indices
+            pickup_demand_forecaster: forecaster for pickup demand
+            dropoff_demand_forecaster: forecaster for dropoff demand
+            pickup_demand_provider: provider for actual pickup demand
+            dropoff_demand_provider: provider for actual dropoff demand
+            device: PyTorch device for tensor operations
+            start_time: simulation start time
+            step_duration: duration of each simulation step
+            reward_weight_demand: weight for demand satisfaction in reward
+            reward_weight_rebalancing: weight for rebalancing cost in reward
+            reward_weight_gini: weight for distribution equality in reward
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
         super(EscooterRDCEnv, self).__init__()
 
         self.device = device
@@ -68,6 +109,17 @@ class EscooterRDCEnv(gym.Env):
         self.step_duration = step_duration
 
     def get_vehicle_counts_per_community(self) -> np.ndarray:
+        """Get the total number of vehicles in each community.
+
+        Args:
+            None
+
+        Returns:
+            np.ndarray: array of vehicle counts per community
+
+        Raises:
+            None
+        """
         vehicle_counts_per_community = np.zeros(self.num_communities, dtype=int)
         for i in range(self.n_zones):
             community_id = self.zone_community_map.iloc[i]["community_index"]
@@ -77,7 +129,20 @@ class EscooterRDCEnv(gym.Env):
             ] += self.current_vehicle_counts[i]
         return vehicle_counts_per_community
 
-    def get_state_observation(self):
+    def get_state_observation(self) -> torch.Tensor:
+        """Get the current state observation for the agent.
+
+        The observation includes demand forecasts and vehicle counts for each community.
+
+        Args:
+            None
+
+        Returns:
+            torch.Tensor: current state observation
+
+        Raises:
+            None
+        """
         observation = []
         vehicle_counts_per_community = self.get_vehicle_counts_per_community()
 
@@ -91,10 +156,32 @@ class EscooterRDCEnv(gym.Env):
 
         return torch.tensor(observation, dtype=torch.float32, device=self.device)
 
-    def calculate_current_time(self):
+    def calculate_current_time(self) -> datetime:
+        """Calculate the current simulation time based on step count.
+
+        Args:
+            None
+
+        Returns:
+            datetime: current simulation time
+
+        Raises:
+            None
+        """
         return self.start_time + self.step_duration * self.current_step
 
-    def generate_demand_forecast(self, current_time: datetime):
+    def generate_demand_forecast(self, current_time: datetime) -> None:
+        """Generate demand forecasts for the current time.
+
+        Args:
+            current_time: current simulation time
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
         time_of_day = current_time.hour
         day = current_time.day
         month = current_time.month
@@ -115,7 +202,20 @@ class EscooterRDCEnv(gym.Env):
         satisfied_demand_ratio,
         total_vehicles_rebalanced,
         gini_coefficient,
-    ):
+    ) -> float:
+        """Calculate the multi-objective reward for the current step.
+
+        Args:
+            satisfied_demand_ratio: ratio of satisfied pickup demand
+            total_vehicles_rebalanced: total number of vehicles moved
+            gini_coefficient: Gini coefficient of vehicle distribution
+
+        Returns:
+            float: calculated reward value between 0 and 1
+
+        Raises:
+            None
+        """
         gini_r = 1.0 - gini_coefficient
 
         reb_ratio = total_vehicles_rebalanced / self.fleet_size
@@ -130,6 +230,17 @@ class EscooterRDCEnv(gym.Env):
         return float(np.clip(reward, 0.0, 1.0))
 
     def calculate_gini_coefficient(self) -> float:
+        """Calculate the Gini coefficient of vehicle distribution across zones.
+
+        Args:
+            None
+
+        Returns:
+            float: Gini coefficient (0 = perfect equality, 1 = maximum inequality)
+
+        Raises:
+            None
+        """
         array = np.array(self.current_vehicle_counts, dtype=float)
         size = array.size
         mean = array.mean()
@@ -149,6 +260,21 @@ class EscooterRDCEnv(gym.Env):
         zone_community_map: pd.DataFrame,
         zone_index_map: dict[str, int],
     ) -> tuple[int, np.ndarray]:
+        """Handle vehicle rebalancing actions across communities.
+
+        Args:
+            actions: list of rebalancing actions for each community
+            current_vehicle_counts: current vehicle counts per zone
+            community_index_map: mapping from community IDs to indices
+            zone_community_map: DataFrame mapping zones to communities
+            zone_index_map: mapping from zone IDs to indices
+
+        Returns:
+            tuple: (total_vehicles_rebalanced, updated_vehicle_counts)
+
+        Raises:
+            None
+        """
         total_vehicles_rebalanced = 0
         temp_vehicle_counts = current_vehicle_counts.copy()
         for community_id, community_index in community_index_map.items():
@@ -184,6 +310,17 @@ class EscooterRDCEnv(gym.Env):
         return total_vehicles_rebalanced, temp_vehicle_counts
 
     def simulate_demand(self, current_time: datetime) -> float:
+        """Simulate pickup and dropoff demand for the current time step.
+
+        Args:
+            current_time: current simulation time
+
+        Returns:
+            float: ratio of satisfied pickup demand
+
+        Raises:
+            None
+        """
         total_satisfied_demand = 0
         pickup_demand = self.pickup_demand_provider.get_demand_per_zone(
             time_of_day=current_time.hour,
@@ -212,7 +349,18 @@ class EscooterRDCEnv(gym.Env):
         )
         return satisfied_demand_ratio
 
-    def step(self, action: List[int]):
+    def step(self, action: List[int]) -> tuple[torch.Tensor, float, bool, bool, dict]:
+        """Execute one step in the environment.
+
+        Args:
+            action: list of action indices for each community
+
+        Returns:
+            tuple: (observation, reward, terminated, truncated, info)
+
+        Raises:
+            AssertionError: if negative vehicle counts are detected
+        """
         actual_action_allocations = [self.action_values[a] for a in action]
 
         total_vehicles_rebalanced, self.current_vehicle_counts = (
@@ -252,7 +400,18 @@ class EscooterRDCEnv(gym.Env):
 
         return next_observation, reward, terminated, truncated, info
 
-    def initialize_vehicle_counts(self):
+    def initialize_vehicle_counts(self) -> None:
+        """Initialize vehicle counts evenly across all zones.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
         self.current_vehicle_counts = np.full(
             self.n_zones,
             self.fleet_size // self.n_zones,
@@ -262,7 +421,19 @@ class EscooterRDCEnv(gym.Env):
         for i in range(remaining_vehicles):
             self.current_vehicle_counts[i] += 1
 
-    def reset(self, *, seed=None, options=None):
+    def reset(self, *, seed=None, options=None) -> tuple[torch.Tensor, dict]:
+        """Reset the environment to a new episode.
+
+        Args:
+            seed: random seed for the episode
+            options: additional reset options
+
+        Returns:
+            tuple: (initial_observation, info)
+
+        Raises:
+            None
+        """
         super().reset(seed=seed, options=options)
 
         self.start_time = self.pickup_demand_provider.get_random_start_time(
@@ -276,9 +447,31 @@ class EscooterRDCEnv(gym.Env):
 
         return self.get_state_observation(), info
 
-    def render(self):
+    def render(self) -> None:
+        """Render the current environment state.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
         print("Rendering the environment state.")
         print(f"Step: {self.current_step}")
 
-    def close(self):
+    def close(self) -> None:
+        """Close the environment.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
         print("Closing the environment.")
