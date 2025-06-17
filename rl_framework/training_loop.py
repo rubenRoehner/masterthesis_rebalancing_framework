@@ -13,103 +13,101 @@ from demand_forecasting.IrConv_LSTM_pre_forecaster import (
 )
 from demand_provider.demand_provider_impl import DemandProviderImpl
 
+# global parameters
+FLEET_SIZE = 1000
+NUM_EPISODES = 200
+MAX_STEPS_PER_EPISODE = 100
+START_TIME = datetime(2025, 2, 11, 14, 0)
+
+
+ZONE_COMMUNITY_MAP: pd.DataFrame = pd.read_pickle(
+    "/home/ruroit00/rebalancing_framework/processed_data/grid_community_map.pickle"
+)  # [grid_id, community_id]
+
+N_COMMUNITIES = ZONE_COMMUNITY_MAP["community_index"].nunique()
+N_ZONES = ZONE_COMMUNITY_MAP.shape[0]
+
+COMMUNITY_INDEX_MAP: dict[str, int] = {}
+for index, value in enumerate(sorted(ZONE_COMMUNITY_MAP["community_index"].unique())):
+    COMMUNITY_INDEX_MAP.update({value: index})
+print(f"Community Index Map: {COMMUNITY_INDEX_MAP}")
+
+ZONE_INDEX_MAP: dict[str, int] = {}
+for i, row in ZONE_COMMUNITY_MAP.iterrows():
+    ZONE_INDEX_MAP.update({row["grid_index"]: i})
+
+RDC_ACTION_VALUES = [-15, -10, -5, 0, 5, 10, 15]
+RDC_FEATURES_PER_COMMUNITY = (
+    3  # forecast for pickup, forecast for dropoff, and current vehicle counts
+)
+
+RDC_REPLAY_BUFFER_CAPACITY = 10_000
+RDC_REPLAY_BUFFER_ALPHA = 0.8
+RDC_REPLAY_BUFFER_BETA_START = 0.3
+RDC_REPLAY_BUFFER_BETA_FRAMES = 150_000
+
+RDC_BATCH_SIZE = 256
+RDC_HIDDEN_DIM = 256
+
+RDC_LR = 2.67e-6
+RDC_LR_STEP_SIZE = 1500
+RDC_LR_GAMMA = 0.9
+RDC_GAMMA = 0.926
+
+RDC_EPSILON_START = 1.0
+RDC_EPSILON_END = 0.06
+RDC_EPSILON_DECAY = 0.999
+
+RDC_TAU = 0.001
+
+RDC_STEP_DURATION = 60  # in minutes
+
+RDC_REWARD_WEIGHT_DEMAND = 1.1
+RDC_REWARD_WEIGHT_REBALANCING = 1.1
+RDC_REWARD_WEIGHT_GINI = 0.1
+
+DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
+PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
+
+DROP_OFF_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_dropoff_forecasts.pkl"
+PICK_UP_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_pickup_forecasts.pkl"
+# REBALANCER_AGENT parameters
+# forecast for pickup, forecast for dropoff, and current vehicle counts
+# REBALANCER_AGENT_FEATURES_PER_ZONE = 3
+
+# --- INITIALIZE ENVIRONMENT ---
+dropoff_demand_forecaster = IrConvLstmDemandPreForecaster(
+    num_communities=N_COMMUNITIES,
+    num_zones=N_ZONES,
+    zone_community_map=ZONE_COMMUNITY_MAP,
+    demand_data_path=DROP_OFF_DEMAND_FORECAST_DATA_PATH,
+)
+
+pickup_demand_forecaster = IrConvLstmDemandPreForecaster(
+    num_communities=N_COMMUNITIES,
+    num_zones=N_ZONES,
+    zone_community_map=ZONE_COMMUNITY_MAP,
+    demand_data_path=PICK_UP_DEMAND_FORECAST_DATA_PATH,
+)
+
+dropoff_demand_provider = DemandProviderImpl(
+    num_communities=N_COMMUNITIES,
+    num_zones=N_ZONES,
+    zone_community_map=ZONE_COMMUNITY_MAP,
+    demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
+)
+
+pickup_demand_provider = DemandProviderImpl(
+    num_communities=N_COMMUNITIES,
+    num_zones=N_ZONES,
+    zone_community_map=ZONE_COMMUNITY_MAP,
+    demand_data_path=PICK_UP_DEMAND_DATA_PATH,
+)
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 def main():
-    # global parameters
-    FLEET_SIZE = 1000
-    NUM_EPISODES = 200
-    MAX_STEPS_PER_EPISODE = 100
-    START_TIME = datetime(2025, 2, 11, 14, 0)
-
-    # [grid_id, community_id]
-    ZONE_COMMUNITY_MAP: pd.DataFrame = pd.read_pickle(
-        "/home/ruroit00/rebalancing_framework/processed_data/grid_community_map.pickle"
-    )
-
-    N_COMMUNITIES = ZONE_COMMUNITY_MAP["community_index"].nunique()
-    N_ZONES = ZONE_COMMUNITY_MAP.shape[0]
-
-    COMMUNITY_INDEX_MAP: dict[str, int] = {}
-    for index, value in enumerate(
-        sorted(ZONE_COMMUNITY_MAP["community_index"].unique())
-    ):
-        COMMUNITY_INDEX_MAP.update({value: index})
-    print(f"Community Index Map: {COMMUNITY_INDEX_MAP}")
-
-    ZONE_INDEX_MAP: dict[str, int] = {}
-    for i, row in ZONE_COMMUNITY_MAP.iterrows():
-        ZONE_INDEX_MAP.update({row["grid_index"]: i})
-
-    # RegionalDistributionCoordinator parameters
-    RDC_ACTION_VALUES = [-15, -10, -5, 0, 5, 10, 15]
-    RDC_FEATURES_PER_COMMUNITY = (
-        3  # forecast for pickup, forecast for dropoff, and current vehicle counts
-    )
-
-    RDC_REPLAY_BUFFER_CAPACITY = 10_000
-    RDC_REPLAY_BUFFER_ALPHA = 0.8
-    RDC_REPLAY_BUFFER_BETA_START = 0.3
-    RDC_REPLAY_BUFFER_BETA_FRAMES = 150_000
-
-    RDC_BATCH_SIZE = 256
-    RDC_HIDDEN_DIM = 256
-
-    RDC_LR = 2.67e-6
-    RDC_LR_STEP_SIZE = 1500
-    RDC_LR_GAMMA = 0.9
-    RDC_GAMMA = 0.926
-
-    RDC_EPSILON_START = 1.0
-    RDC_EPSILON_END = 0.06
-    RDC_EPSILON_DECAY = 0.999
-
-    RDC_TAU = 0.001
-
-    RDC_STEP_DURATION = 60  # in minutes
-
-    RDC_REWARD_WEIGHT_DEMAND = 1.1
-    RDC_REWARD_WEIGHT_REBALANCING = 1.1
-    RDC_REWARD_WEIGHT_GINI = 0.1
-
-    DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
-    PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
-
-    DROP_OFF_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_dropoff_forecasts.pkl"
-    PICK_UP_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_pickup_forecasts.pkl"
-    # REBALANCER_AGENT parameters
-    # forecast for pickup, forecast for dropoff, and current vehicle counts
-    # REBALANCER_AGENT_FEATURES_PER_ZONE = 3
-
-    # --- INITIALIZE ENVIRONMENT ---
-    dropoff_demand_forecaster = IrConvLstmDemandPreForecaster(
-        num_communities=N_COMMUNITIES,
-        num_zones=N_ZONES,
-        zone_community_map=ZONE_COMMUNITY_MAP,
-        demand_data_path=DROP_OFF_DEMAND_FORECAST_DATA_PATH,
-    )
-
-    pickup_demand_forecaster = IrConvLstmDemandPreForecaster(
-        num_communities=N_COMMUNITIES,
-        num_zones=N_ZONES,
-        zone_community_map=ZONE_COMMUNITY_MAP,
-        demand_data_path=PICK_UP_DEMAND_FORECAST_DATA_PATH,
-    )
-
-    dropoff_demand_provider = DemandProviderImpl(
-        num_communities=N_COMMUNITIES,
-        num_zones=N_ZONES,
-        zone_community_map=ZONE_COMMUNITY_MAP,
-        demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
-    )
-
-    pickup_demand_provider = DemandProviderImpl(
-        num_communities=N_COMMUNITIES,
-        num_zones=N_ZONES,
-        zone_community_map=ZONE_COMMUNITY_MAP,
-        demand_data_path=PICK_UP_DEMAND_DATA_PATH,
-    )
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     rdc_env = EscooterRDCEnv(
         num_communities=N_COMMUNITIES,
