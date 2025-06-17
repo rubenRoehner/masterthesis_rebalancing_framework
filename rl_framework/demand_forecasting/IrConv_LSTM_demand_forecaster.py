@@ -1,3 +1,11 @@
+"""
+IrConv_LSTM_demand_forecaster.py
+
+IrConv-LSTM neural network-based demand forecaster implementation.
+This module provides sophisticated demand forecasting using a pre-trained
+Irregular Convolution LSTM model that captures spatial-temporal patterns in e-scooter demand.
+"""
+
 from demand_forecasting.demand_forecaster import DemandForecaster
 
 import numpy as np
@@ -16,29 +24,11 @@ from demand_forecasting.IrConv_LSTM.model.irregular_convolution_LSTM import (
 
 
 class IrConvLstmDemandForecaster(DemandForecaster):
-    """
-    Demand forecasting module using IrConv-LSTM model.
-    This class is designed to predict demand for a given time of day, day of week, and month.
-    It uses a pre-trained IrConv-LSTM model to perform the forecasting.
+    """Neural network-based demand forecaster using IrConv-LSTM architecture.
 
-    Parameters
-    ----------
-    num_communities : int
-        Number of communities.
-    num_zones : int
-        Number of zones.
-    zone_community_map : pd.DataFrame
-        A mapping of zones to communities. Shape: (num_zones, num_communities).
-    model_path : str
-        Path to the pre-trained IrConv-LSTM model.
-    demand_data_path : str
-        Path to the demand data. The data should be a pandas DataFrame with a DatetimeIndex.
-    closeness_size : int, optional
-        Size of the closeness data in hours. Default is 24. Should be the same as for training.
-    period_size : int, optional
-        Size of the period data in days. Default is 7. Should be the same as for training.
-    trend_size : int, optional
-        Size of the trend data in weeks. Default is 2. Should be the same as for training.
+    This forecaster uses a pre-trained Irregular Convolution LSTM model to predict
+    e-scooter demand patterns by analyzing closeness, period, and trend components
+    of historical demand data.
     """
 
     def __init__(
@@ -51,7 +41,25 @@ class IrConvLstmDemandForecaster(DemandForecaster):
         closeness_size: int = 24,
         period_size: int = 7,
         trend_size: int = 2,
-    ):
+    ) -> None:
+        """Initialize the IrConv-LSTM demand forecaster with pre-trained model.
+
+        Args:
+            num_communities: total number of communities in the system
+            num_zones: total number of zones across all communities
+            zone_community_map: DataFrame mapping zones to their communities
+            model_path: path to the pre-trained IrConv-LSTM model file
+            demand_data_path: path to the historical demand data file
+            closeness_size: number of recent hours to consider (default: 24)
+            period_size: number of recent days to consider (default: 7)
+            trend_size: number of recent weeks to consider (default: 2)
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
         super().__init__(num_communities, num_zones, zone_community_map)
         self.model_path = model_path
         use_cuda = torch.cuda.is_available()
@@ -93,8 +101,18 @@ class IrConvLstmDemandForecaster(DemandForecaster):
     def predict_demand_per_zone(
         self, time_of_day: int, day: int, month: int
     ) -> np.ndarray:
-        """
-        Get demand per zone for the given time of day, day of week, and month.
+        """Predict demand for all zones using the IrConv-LSTM model.
+
+        Args:
+            time_of_day: hour of day (0-23)
+            day: day of month
+            month: month of year
+
+        Returns:
+            np.ndarray: predicted demand values for each zone
+
+        Raises:
+            ValueError: if no matching historical data is found for context
         """
 
         prediction = self.perform_inference(
@@ -102,7 +120,7 @@ class IrConvLstmDemandForecaster(DemandForecaster):
             self.get_period_data(time_of_day, day, month),
             self.get_trend_data(time_of_day, day, month),
         )
-        # Rescale the prediction
+
         prediction = (
             prediction * (self.data_max - self.data_min) + self.data_min
         ).reshape(self.num_zones, 1)
@@ -112,8 +130,18 @@ class IrConvLstmDemandForecaster(DemandForecaster):
     def predict_demand_per_community(
         self, time_of_day: int, day: int, month: int
     ) -> np.ndarray:
-        """
-        Get demand per community for the given time of day, day of week, and month.
+        """Predict aggregated demand for all communities using the IrConv-LSTM model.
+
+        Args:
+            time_of_day: hour of day (0-23)
+            day: day of month
+            month: month of year
+
+        Returns:
+            np.ndarray: predicted aggregated demand values for each community
+
+        Raises:
+            ValueError: if no matching historical data is found for context
         """
         zone_demand_values = self.predict_demand_per_zone(time_of_day, day, month)
         zone_indices = sorted(self.zone_community_map["grid_index"].values)
@@ -138,8 +166,19 @@ class IrConvLstmDemandForecaster(DemandForecaster):
     def predict_demand_per_zone_community(
         self, time_of_day: int, day: int, month: int, community_id: str
     ) -> np.ndarray:
-        """
-        Get demand per zone for the given time of day, day of week, and month.
+        """Predict demand for zones within a specific community using the IrConv-LSTM model.
+
+        Args:
+            time_of_day: hour of day (0-23)
+            day: day of month
+            month: month of year
+            community_id: ID of the target community
+
+        Returns:
+            np.ndarray: predicted demand values for zones in the specified community
+
+        Raises:
+            ValueError: if no matching historical data is found for context
         """
         zone_demand_values = self.predict_demand_per_zone(time_of_day, day, month)
         zone_indices = sorted(self.zone_community_map["grid_index"].values)
@@ -160,9 +199,20 @@ class IrConvLstmDemandForecaster(DemandForecaster):
         ].to_numpy()
         return community_demand
 
-    def _maxminscaler_3d(self, tensor_3d: np.ndarray, data_range=(0, 1)):
-        """
-        Scales a 3D numpy array to a given range using global min/max. Like the implementation of the IrConv-LSTM model.
+    def _maxminscaler_3d(
+        self, tensor_3d: np.ndarray, data_range=(0, 1)
+    ) -> tuple[np.ndarray, float, float]:
+        """Scale a 3D numpy array to a given range using global min/max normalization.
+
+        Args:
+            tensor_3d: 3D numpy array to be scaled
+            data_range: target range for scaling (default: (0, 1))
+
+        Returns:
+            tuple: (scaled_array, original_max, original_min)
+
+        Raises:
+            None
         """
         scaler_max = np.max(tensor_3d)
         scaler_min = np.min(tensor_3d)
@@ -176,6 +226,19 @@ class IrConvLstmDemandForecaster(DemandForecaster):
         return X_scaled, scaler_max, scaler_min
 
     def _get_target_index(self, time_of_day: int, day: int, month: int) -> int:
+        """Get the index of the target timestamp in the historical data.
+
+        Args:
+            time_of_day: hour of day (0-23)
+            day: day of month
+            month: month of year
+
+        Returns:
+            int: index position of the matching timestamp
+
+        Raises:
+            ValueError: if no matching historical data is found
+        """
         # Filter index based on time components
         matching_timestamps = self.demand_data.index[
             (self.demand_data.index.hour == time_of_day)
@@ -197,9 +260,17 @@ class IrConvLstmDemandForecaster(DemandForecaster):
         return target_idx_array[0]
 
     def _get_historical_data_point(self, target_idx: int, offset: int) -> np.ndarray:
-        """
-        Retrieves a historical data point (num_zones, 1) from self.scaled_demand_data.
-        Handles index out of bounds by returning zeros.
+        """Retrieve a historical data point from scaled demand data.
+
+        Args:
+            target_idx: index of the target timestamp
+            offset: number of time steps to go back from target
+
+        Returns:
+            np.ndarray: historical data point with shape (num_zones, 1)
+
+        Raises:
+            None
         """
         hist_idx = target_idx - offset
         if 0 <= hist_idx < len(self.scaled_demand_data):
@@ -214,6 +285,19 @@ class IrConvLstmDemandForecaster(DemandForecaster):
         period_data_np: np.ndarray,
         trend_data_np: np.ndarray,
     ) -> np.ndarray:
+        """Perform inference using the IrConv-LSTM model.
+
+        Args:
+            closeness_data_np: closeness component data
+            period_data_np: period component data
+            trend_data_np: trend component data
+
+        Returns:
+            np.ndarray: model prediction output
+
+        Raises:
+            None
+        """
         use_cuda = torch.cuda.is_available()
         device = torch.device("cuda" if use_cuda else "cpu")
 
@@ -239,10 +323,18 @@ class IrConvLstmDemandForecaster(DemandForecaster):
         return prediction_tensor.squeeze().cpu().numpy()
 
     def get_closeness_data(self, time_of_day: int, day: int, month: int) -> np.ndarray:
-        """
-        Get closeness data for the given date.
-        Output shape: (closeness_size, num_zones, 1)
-        Order: T-closeness_size, ..., T-1
+        """Extract closeness component data for the specified time.
+
+        Args:
+            time_of_day: hour of day (0-23)
+            day: day of month
+            month: month of year
+
+        Returns:
+            np.ndarray: closeness data with shape (closeness_size, num_zones, 1)
+
+        Raises:
+            ValueError: if no matching historical data is found
         """
         target_idx = self._get_target_index(time_of_day, day, month)
 
@@ -264,10 +356,18 @@ class IrConvLstmDemandForecaster(DemandForecaster):
         return np.array(closeness_data_list, dtype=np.float32)
 
     def get_period_data(self, time_of_day: int, day: int, month: int) -> np.ndarray:
-        """
-        Get period data for the given date.
-        Output shape: (period_size, num_zones, 1)
-        Order: T-(period_size*24h), ..., T-(1*24h)
+        """Extract period component data for the specified time.
+
+        Args:
+            time_of_day: hour of day (0-23)
+            day: day of month
+            month: month of year
+
+        Returns:
+            np.ndarray: period data with shape (period_size, num_zones, 1)
+
+        Raises:
+            ValueError: if no matching historical data is found
         """
         target_idx = self._get_target_index(time_of_day, day, month)
 
@@ -281,10 +381,18 @@ class IrConvLstmDemandForecaster(DemandForecaster):
         return np.array(period_data_list, dtype=np.float32)
 
     def get_trend_data(self, time_of_day: int, day: int, month: int) -> np.ndarray:
-        """
-        Get trend data for the given date.
-        Output shape: (trend_size, num_zones, 1)
-        Order: T-(trend_size*168h), ..., T-(1*168h)
+        """Extract trend component data for the specified time.
+
+        Args:
+            time_of_day: hour of day (0-23)
+            day: day of month
+            month: month of year
+
+        Returns:
+            np.ndarray: trend data with shape (trend_size, num_zones, 1)
+
+        Raises:
+            ValueError: if no matching historical data is found
         """
         target_idx = self._get_target_index(time_of_day, day, month)
 
