@@ -44,8 +44,8 @@ UIC_AGENT_PATHS = [
     "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa717ffffff_user_incentive_coordinator.zip",
     "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa71fffffff_user_incentive_coordinator.zip",
     "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa787ffffff_user_incentive_coordinator.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa7a7ffffff_user_incentive_coordinator.zip",
     "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa78fffffff_user_incentive_coordinator.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa7a7ffffff_user_incentive_coordinator.zip",
     "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa7afffffff_user_incentive_coordinator.zip",
 ]
 
@@ -99,11 +99,6 @@ def run_evaluation() -> None:
     Raises:
         None
     """
-    print(f"Number of communities: {NUM_COMMUNITIES}")
-    print(f"NUmber of zones: {N_TOTAL_ZONES}")
-    print(
-        f"Number of zones per community: {ZONE_COMMUNITY_MAP['community_index'].value_counts().to_dict()}"
-    )
     rdc_agent_network: OrderedDict = torch.load(RDC_AGENT_PATH, map_location=device)
     uic_agents = [PPO.load(path, device=device) for path in UIC_AGENT_PATHS]
 

@@ -104,8 +104,8 @@ class HRLFrameworkEvaluator:
             zone_ids = list(community_zones_df["grid_index"])
 
             community_zone_index_map = {}
-            for i, row in community_zones_df.iterrows():
-                community_zone_index_map[row["grid_index"]] = i
+            for local_idx, (i, row) in enumerate(community_zones_df.iterrows()):
+                community_zone_index_map[row["grid_index"]] = local_idx
 
             community_zone_ids_set = set(zone_ids)
             community_zone_neighbor_map = {}
