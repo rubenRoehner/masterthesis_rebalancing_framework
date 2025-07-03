@@ -36,6 +36,8 @@ START_TIME = datetime(2025, 5, 18, 15, 0)
 END_TIME = datetime(2025, 6, 18, 15, 0)
 STEP_DURATION = 60
 MAX_STEPS = 400
+ENABLE_RDC_REBALANCING = True
+ENABLE_UIC_REBALANCING = True
 RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250630-184804.pth"
 UIC_AGENT_PATHS = [
     "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa44fffffff_user_incentive_coordinator.zip",
@@ -161,6 +163,8 @@ def run_evaluation() -> None:
         user_willingness_fn=USER_WILLINGNESS_FN,
         zone_index_map=ZONE_INDEX_MAP,
         device=device,
+        enable_rdc_rebalancing=ENABLE_RDC_REBALANCING,
+        enable_uic_rebalancing=ENABLE_UIC_REBALANCING,
     )
 
     results = evaluator.evaluate()

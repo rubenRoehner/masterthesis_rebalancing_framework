@@ -12,6 +12,7 @@ import pandas as pd
 import torch
 from datetime import datetime, timedelta
 from typing import List, Dict, Callable
+from tqdm import tqdm
 from demand_forecasting.demand_forecaster import DemandForecaster
 from demand_provider.demand_provider import DemandProvider
 from regional_distribution_coordinator.regional_distribution_coordinator import (
@@ -48,6 +49,8 @@ class HRLFrameworkEvaluator:
         user_willingness_fn: Callable[[float], float],
         zone_neighbor_map: dict[str, list[str]],
         device: torch.device,
+        enable_rdc_rebalancing: bool = True,
+        enable_uic_rebalancing: bool = True,
     ) -> None:
         """Initialize the HRL Framework Evaluator.
 
@@ -68,6 +71,8 @@ class HRLFrameworkEvaluator:
             user_willingness_fn: function mapping incentive to user compliance probability
             zone_neighbor_map: mapping from zone IDs to neighbor zone IDs
             device: PyTorch device for tensor operations
+            enable_rdc_rebalancing: whether to enable RDC manual rebalancing
+            enable_uic_rebalancing: whether to enable UIC incentive-based rebalancing
 
         Returns:
             None
@@ -144,6 +149,8 @@ class HRLFrameworkEvaluator:
         self.uic_cumulative_rewards = [0.0 for _ in range(self.n_communities)]
 
         self.device = device
+        self.enable_rdc_rebalancing = enable_rdc_rebalancing
+        self.enable_uic_rebalancing = enable_uic_rebalancing
 
     def get_vehicle_counts_per_community(self) -> np.ndarray:
         """Get the total number of vehicles in each community.
@@ -261,110 +268,149 @@ class HRLFrameworkEvaluator:
             None
         """
         satisfied_ratio = []
-        while self.current_step < self.max_steps:
-            # --- RDC operator based rebalancing ---
-            obs_rdc = self.get_rdc_state_observation()
+        total_rebalanced_vehicles_manually = []
+        total_rebalanced_vehicles_incentives = []
 
-            with torch.no_grad():
-                rdc_action_inidces = self.rdc_agent.select_action(obs_rdc)
+        with tqdm(
+            total=self.max_steps, desc="Evaluating HRL Framework", unit="step"
+        ) as pbar:
+            while self.current_step < self.max_steps:
+                # --- RDC operator based rebalancing ---
+                obs_rdc = self.get_rdc_state_observation()
 
-            rdc_action_inidces = [int(a) for a in rdc_action_inidces]
+                with torch.no_grad():
+                    rdc_action_inidces = self.rdc_agent.select_action(obs_rdc)
 
-            rdc_allocations = [
-                self.rdc_agent.action_values[a] for a in rdc_action_inidces
-            ]
+                rdc_action_inidces = [int(a) for a in rdc_action_inidces]
 
-            _, self.global_vehicle_counts = EscooterRDCEnv.handle_rebalancing(
-                actions=rdc_allocations,
-                current_vehicle_counts=self.global_vehicle_counts,
-                community_index_map=self.community_index_map,
-                zone_community_map=self.zone_community_map,
-                zone_index_map=self.zone_index_map,
-            )
-
-            satisfied_per_community = [0 for _ in range(self.n_communities)]
-            offered_per_community = [0 for _ in range(self.n_communities)]
-
-            for community_id, community_index in self.community_index_map.items():
-                print(
-                    f"Evaluating community {community_id} at step {self.current_step}"
-                )
-                uic_observation = self.get_uic_state_observation(
-                    community_id=community_id
-                )
-
-                uic_action, _ = self.uic_agents[community_index].predict(
-                    uic_observation, deterministic=True
-                )
-
-                local_dropoff_demand = (
-                    self.dropoff_demand_provider.get_demand_per_zone_community(
-                        time_of_day=self.current_time.hour,
-                        day=self.current_time.day,
-                        month=self.current_time.month,
-                        community_id=community_id,
-                    )
-                )
-                offered_demand = len(local_dropoff_demand)
-                local_pickup_demand = (
-                    self.pickup_demand_provider.get_demand_per_zone_community(
-                        time_of_day=self.current_time.hour,
-                        day=self.current_time.day,
-                        month=self.current_time.month,
-                        community_id=community_id,
-                    )
-                )
-
-                global_zone_indices = self.zones_in_community[community_id]
-
-                zone_community_df = self.zone_community_map[
-                    self.zone_community_map["community_index"] == community_id
-                ]
-                zone_ids = list(zone_community_df["grid_index"])
-                zone_id_to_local = self.community_zone_index_maps[community_id]
-                zone_neighbor_map_local = self.community_zone_neighbor_maps[
-                    community_id
+                rdc_allocations = [
+                    self.rdc_agent.action_values[a] for a in rdc_action_inidces
                 ]
 
-                local_vehicle_counts = (
-                    self.global_vehicle_counts[global_zone_indices].astype(int).copy()
-                )
-
-                local_dropoff_demand, _ = EscooterUICEnv.handle_incentives(
-                    action=uic_action,
-                    dropoff_demand=local_dropoff_demand,
-                    zone_ids=zone_ids,
-                    zone_id_to_local=zone_id_to_local,
-                    zone_neighbor_map=zone_neighbor_map_local,
-                    user_willingness_fn=self.user_willingness_fn,
-                )
-
-                local_vehicle_counts, total_satisfied_demand = (
-                    EscooterUICEnv.update_vehicle_counts(
-                        n_zones=len(local_vehicle_counts),
-                        pickup_demand=local_pickup_demand,
-                        dropoff_demand=local_dropoff_demand,
-                        current_vehicle_counts=local_vehicle_counts,
+                vehicles_rebalanced_manually = 0
+                if self.enable_rdc_rebalancing:
+                    vehicles_rebalanced_manually, self.global_vehicle_counts = (
+                        EscooterRDCEnv.handle_rebalancing(
+                            actions=rdc_allocations,
+                            current_vehicle_counts=self.global_vehicle_counts,
+                            community_index_map=self.community_index_map,
+                            zone_community_map=self.zone_community_map,
+                            zone_index_map=self.zone_index_map,
+                        )
                     )
+
+                satisfied_per_community = [0 for _ in range(self.n_communities)]
+                offered_per_community = [0 for _ in range(self.n_communities)]
+                vehicles_rebalanced_uic = [0 for _ in range(self.n_communities)]
+
+                for community_id, community_index in self.community_index_map.items():
+                    uic_observation = self.get_uic_state_observation(
+                        community_id=community_id
+                    )
+
+                    uic_action, _ = self.uic_agents[community_index].predict(
+                        uic_observation, deterministic=True
+                    )
+
+                    local_dropoff_demand = (
+                        self.dropoff_demand_provider.get_demand_per_zone_community(
+                            time_of_day=self.current_time.hour,
+                            day=self.current_time.day,
+                            month=self.current_time.month,
+                            community_id=community_id,
+                        )
+                    )
+                    offered_demand = len(local_dropoff_demand)
+                    local_pickup_demand = (
+                        self.pickup_demand_provider.get_demand_per_zone_community(
+                            time_of_day=self.current_time.hour,
+                            day=self.current_time.day,
+                            month=self.current_time.month,
+                            community_id=community_id,
+                        )
+                    )
+
+                    global_zone_indices = self.zones_in_community[community_id]
+
+                    zone_community_df = self.zone_community_map[
+                        self.zone_community_map["community_index"] == community_id
+                    ]
+                    zone_ids = list(zone_community_df["grid_index"])
+                    zone_id_to_local = self.community_zone_index_maps[community_id]
+                    zone_neighbor_map_local = self.community_zone_neighbor_maps[
+                        community_id
+                    ]
+
+                    local_vehicle_counts = (
+                        self.global_vehicle_counts[global_zone_indices]
+                        .astype(int)
+                        .copy()
+                    )
+                    if self.enable_uic_rebalancing:
+                        (
+                            local_dropoff_demand,
+                            vehicles_rebalanced_uic[community_index],
+                        ) = EscooterUICEnv.handle_incentives(
+                            action=uic_action,
+                            dropoff_demand=local_dropoff_demand,
+                            zone_ids=zone_ids,
+                            zone_id_to_local=zone_id_to_local,
+                            zone_neighbor_map=zone_neighbor_map_local,
+                            user_willingness_fn=self.user_willingness_fn,
+                        )
+                    else:
+                        vehicles_rebalanced_uic[community_index] = 0
+
+                    local_vehicle_counts, total_satisfied_demand = (
+                        EscooterUICEnv.update_vehicle_counts(
+                            n_zones=len(local_vehicle_counts),
+                            pickup_demand=local_pickup_demand,
+                            dropoff_demand=local_dropoff_demand,
+                            current_vehicle_counts=local_vehicle_counts,
+                        )
+                    )
+
+                    # Update global vehicle counts
+                    self.global_vehicle_counts[global_zone_indices] = (
+                        local_vehicle_counts
+                    )
+
+                    satisfied_per_community[community_index] = total_satisfied_demand
+                    offered_per_community[community_index] = offered_demand
+
+                total_satisfied_all = sum(satisfied_per_community)
+                total_offered_all = sum(offered_per_community)
+                total_rebalanced_vehicles_incentives.append(
+                    sum(vehicles_rebalanced_uic)
                 )
+                total_rebalanced_vehicles_manually.append(vehicles_rebalanced_manually)
+                if total_offered_all > 0:
+                    satisfied_ratio_global = total_satisfied_all / float(
+                        total_offered_all
+                    )
+                else:
+                    satisfied_ratio_global = 1.0
 
-                # Update global vehicle counts
-                self.global_vehicle_counts[global_zone_indices] = local_vehicle_counts
+                satisfied_ratio.append(satisfied_ratio_global)
+                self.current_step += 1
+                self.current_time += self.step_duration
 
-                satisfied_per_community[community_index] = total_satisfied_demand
-                offered_per_community[community_index] = offered_demand
-
-            total_satisfied_all = sum(satisfied_per_community)
-            total_offered_all = sum(offered_per_community)
-            if total_offered_all > 0:
-                satisfied_ratio_global = total_satisfied_all / float(total_offered_all)
-            else:
-                satisfied_ratio_global = 1.0
-
-            satisfied_ratio.append(satisfied_ratio_global)
-            self.current_step += 1
-            self.current_time += self.step_duration
+                # Update progress bar with current metrics
+                pbar.set_postfix(
+                    {
+                        "satisfied_ratio": f"{satisfied_ratio_global:.3f}",
+                        "manual_rebal": vehicles_rebalanced_manually,
+                        "incentive_rebal": sum(vehicles_rebalanced_uic),
+                    }
+                )
+                pbar.update(1)
 
         return {
             "mean_satisfied_ratio": np.mean(satisfied_ratio),
+            "mean_rebalanced_vehicles_manually": np.mean(
+                total_rebalanced_vehicles_manually
+            ),
+            "mean_rebalanced_vehicles_incentives": np.mean(
+                total_rebalanced_vehicles_incentives
+            ),
         }
