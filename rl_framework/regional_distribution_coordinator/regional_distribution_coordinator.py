@@ -383,7 +383,7 @@ class RegionalDistributionCoordinator:
 
         return loss.item(), td_per_head.detach()
 
-    def set_evluation_mode(self, state_dict) -> None:
+    def set_evaluation_mode(self, state_dict) -> None:
         """Set the agent to evaluation mode with given state dict.
 
         Args:

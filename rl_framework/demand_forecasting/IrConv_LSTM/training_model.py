@@ -1,7 +1,7 @@
 from model.irregular_convolution_LSTM import Irregular_Convolution_LSTM as irconvlstm
 from data import escooter_1h_9h3_STG
 import math
-import time
+import datetime
 import torch
 from torch import nn
 from torch.autograd import Variable
@@ -24,6 +24,8 @@ def train_model(size_of_kernel=1):  # Set default kernel size to 1 for hexagonal
     """
 
     use_cuda = torch.cuda.is_available()
+
+    torch.cuda.set_device(1)  # Set the GPU device to use
     # Keep track of loss in tensorboard
     writer = SummaryWriter()
     # Parameters
@@ -31,13 +33,14 @@ def train_model(size_of_kernel=1):  # Set default kernel size to 1 for hexagonal
     batch_size = 50
     max_epochs = 50
     kernel_size = size_of_kernel  # Use the passed kernel size parameter
+    # (Timestamp('2025-02-11 14:00:00'), Timestamp('2025-06-18 15:00:00'))
     start_date = "022514"  # date format: MMDDHH
-    end_date = "042023"  # date format: MMDDHH
+    end_date = "060113"  # date format: MMDDHH
     closeness_size = 24
     period_size = 7
     trend_size = 2
     # For hexagonal grid, explicitly set the number of grid cells to match your data
-    num_grid_cells = 260  # Matches the number of columns in your dataset
+    num_grid_cells = 291  # Matches the number of columns in your dataset
     torch.cuda.manual_seed(50)
     # Training data loading
     dset = escooter_1h_9h3_STG(
@@ -58,15 +61,15 @@ def train_model(size_of_kernel=1):  # Set default kernel size to 1 for hexagonal
     )
     print("Training data loading complete.")
     # Validating data loading
-    valid_start_date = "042100"  # date format: MMDDHH
-    valid_end_date = "042808"  # date format: MMDDHH
+    valid_start_date = "060114"  # date format: MMDDHH
+    valid_end_date = "061814"  # date format: MMDDHH
     dset_vaild = escooter_1h_9h3_STG(
         closeness=closeness_size,
         period=period_size,
         trend=trend_size,
         start_date=valid_start_date,
         end_date=valid_end_date,
-        data_path="/home/ruroit00/rebalancing_framework/processed_data/bolt_pickup_demand_h3_hourly.pickle",
+        data_path="/home/ruroit00/rebalancing_framework/processed_data/bolt_dropoff_demand_h3_hourly.pickle",
     )
     vaild_loader = DataLoader(
         dset_vaild,
@@ -197,7 +200,10 @@ def train_model(size_of_kernel=1):  # Set default kernel size to 1 for hexagonal
         scheduler_model.step()
 
     model_name = (
-        "irregular_convolution_LSTM_" + str(max_epochs) + "_" + str(round(time.time()))
+        "irregular_convolution_LSTM_"
+        + str(max_epochs)
+        + "_"
+        + str(datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
     )
     print(
         "MSE:",

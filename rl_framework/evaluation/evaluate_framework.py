@@ -6,6 +6,15 @@ This script loads trained RDC and UIC agents and evaluates their coordinated per
 in managing e-scooter fleet distribution across multiple communities.
 """
 
+import sys
+import os
+
+# Add the parent directories to Python path
+sys.path.append(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from demand_forecasting.IrConv_LSTM_pre_forecaster import (
     IrConvLstmDemandPreForecaster,
 )
@@ -14,7 +23,7 @@ from regional_distribution_coordinator.regional_distribution_coordinator import 
 )
 from training_loop import RDC_ACTION_VALUES, RDC_HIDDEN_DIM, RDC_FEATURES_PER_COMMUNITY
 from demand_provider.demand_provider_impl import DemandProviderImpl
-from rl_framework.evaluation.hrl_framework_evaluator import HRLFrameworkEvaluator
+from hrl_framework_evaluator import HRLFrameworkEvaluator
 from stable_baselines3 import PPO
 import torch
 import pandas as pd
@@ -23,20 +32,21 @@ from collections import OrderedDict
 from uic_training_loop import USER_WILLINGNESS_FN
 
 FLEET_SIZE = 600
-START_TIME = datetime(2025, 2, 11, 14, 0)
+START_TIME = datetime(2025, 5, 18, 15, 0)
+END_TIME = datetime(2025, 6, 18, 15, 0)
 STEP_DURATION = 60
 MAX_STEPS = 400
-RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250526-151306.pth"
+RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250630-184804.pth"
 UIC_AGENT_PATHS = [
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa7a7ffffff_user_incentive_coordinator.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa7afffffff_user_incentive_coordinator.zip",
     "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa44fffffff_user_incentive_coordinator.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa71fffffff_user_incentive_coordinator.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa78fffffff_user_incentive_coordinator.zip",
     "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa637ffffff_user_incentive_coordinator.zip",
     "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa707ffffff_user_incentive_coordinator.zip",
     "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa717ffffff_user_incentive_coordinator.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa71fffffff_user_incentive_coordinator.zip",
     "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa787ffffff_user_incentive_coordinator.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa7a7ffffff_user_incentive_coordinator.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa78fffffff_user_incentive_coordinator.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa7afffffff_user_incentive_coordinator.zip",
 ]
 
 ZONE_COMMUNITY_MAP: pd.DataFrame = pd.read_pickle(
@@ -44,6 +54,7 @@ ZONE_COMMUNITY_MAP: pd.DataFrame = pd.read_pickle(
 )
 NUM_COMMUNITIES = ZONE_COMMUNITY_MAP["community_index"].nunique()
 N_TOTAL_ZONES = ZONE_COMMUNITY_MAP.shape[0]
+
 
 ZONE_INDEX_MAP: dict[str, int] = {}
 for i, row in ZONE_COMMUNITY_MAP.iterrows():
@@ -88,6 +99,11 @@ def run_evaluation() -> None:
     Raises:
         None
     """
+    print(f"Number of communities: {NUM_COMMUNITIES}")
+    print(f"NUmber of zones: {N_TOTAL_ZONES}")
+    print(
+        f"Number of zones per community: {ZONE_COMMUNITY_MAP['community_index'].value_counts().to_dict()}"
+    )
     rdc_agent_network: OrderedDict = torch.load(RDC_AGENT_PATH, map_location=device)
     uic_agents = [PPO.load(path, device=device) for path in UIC_AGENT_PATHS]
 
@@ -110,6 +126,8 @@ def run_evaluation() -> None:
         num_zones=N_TOTAL_ZONES,
         zone_community_map=ZONE_COMMUNITY_MAP,
         demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
+        startTime=START_TIME,
+        endTime=END_TIME,
     )
 
     pickup_demand_provider = DemandProviderImpl(
@@ -117,6 +135,8 @@ def run_evaluation() -> None:
         num_zones=N_TOTAL_ZONES,
         zone_community_map=ZONE_COMMUNITY_MAP,
         demand_data_path=PICK_UP_DEMAND_DATA_PATH,
+        startTime=START_TIME,
+        endTime=END_TIME,
     )
 
     rdc_agent = RegionalDistributionCoordinator(
@@ -127,7 +147,7 @@ def run_evaluation() -> None:
         state_dim=NUM_COMMUNITIES * RDC_FEATURES_PER_COMMUNITY,
     )
 
-    rdc_agent.set_evluation_mode(rdc_agent_network)
+    rdc_agent.set_evaluation_mode(rdc_agent_network)
 
     evaluator = HRLFrameworkEvaluator(
         fleet_size=FLEET_SIZE,

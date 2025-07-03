@@ -45,6 +45,7 @@ N_EPOCHS = 20
 MAX_STEPS_PER_EPISODE = 256
 TOTAL_TIME_STEPS = 200_000
 START_TIME = datetime(2025, 2, 11, 14, 0)
+END_TIME = datetime(2025, 5, 18, 15, 0)
 
 torch.cuda.set_device(2)
 N_WORKERS = 8
@@ -232,6 +233,8 @@ def train_uic(community_id: str) -> None:
         num_zones=N_TOTAL_ZONES,
         zone_community_map=ZONE_COMMUNITY_MAP,
         demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
+        startTime=START_TIME,
+        endTime=END_TIME,
     )
 
     pickup_demand_provider = DemandProviderImpl(
@@ -239,6 +242,8 @@ def train_uic(community_id: str) -> None:
         num_zones=N_TOTAL_ZONES,
         zone_community_map=ZONE_COMMUNITY_MAP,
         demand_data_path=PICK_UP_DEMAND_DATA_PATH,
+        startTime=START_TIME,
+        endTime=END_TIME,
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

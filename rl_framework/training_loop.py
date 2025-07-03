@@ -22,10 +22,11 @@ from demand_forecasting.IrConv_LSTM_pre_forecaster import (
 from demand_provider.demand_provider_impl import DemandProviderImpl
 
 # global parameters
-FLEET_SIZE = 1000
-NUM_EPISODES = 200
+FLEET_SIZE = 500
+NUM_EPISODES = 1000
 MAX_STEPS_PER_EPISODE = 100
 START_TIME = datetime(2025, 2, 11, 14, 0)
+END_TIME = datetime(2025, 5, 18, 15, 0)
 
 
 ZONE_COMMUNITY_MAP: pd.DataFrame = pd.read_pickle(
@@ -103,6 +104,8 @@ dropoff_demand_provider = DemandProviderImpl(
     num_zones=N_ZONES,
     zone_community_map=ZONE_COMMUNITY_MAP,
     demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
+    startTime=START_TIME,
+    endTime=END_TIME,
 )
 
 pickup_demand_provider = DemandProviderImpl(
@@ -110,6 +113,8 @@ pickup_demand_provider = DemandProviderImpl(
     num_zones=N_ZONES,
     zone_community_map=ZONE_COMMUNITY_MAP,
     demand_data_path=PICK_UP_DEMAND_DATA_PATH,
+    startTime=START_TIME,
+    endTime=END_TIME,
 )
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

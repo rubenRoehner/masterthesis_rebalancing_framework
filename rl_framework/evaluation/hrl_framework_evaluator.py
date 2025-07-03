@@ -93,14 +93,40 @@ class HRLFrameworkEvaluator:
         self.n_communities = len(community_index_map)
         self.n_total_zones = zone_community_map.shape[0]
 
-        self.zones_in_community: List[List[int]] = [
-            [] for _ in range(self.n_communities)
-        ]
-        for idx, row in zone_community_map.iterrows():
-            community_id = row["community_index"]
-            community_index = community_index_map[community_id]
-            zone_index_global = zone_index_map[row["grid_index"]]
-            self.zones_in_community[community_index].append(zone_index_global)
+        self.zones_in_community: Dict[str, List[int]] = {}
+        self.community_zone_index_maps: Dict[str, Dict[str, int]] = {}
+        self.community_zone_neighbor_maps: Dict[str, Dict[str, List[str]]] = {}
+
+        for community_id in community_index_map.keys():
+            community_zones_df = zone_community_map[
+                zone_community_map["community_index"] == community_id
+            ]
+            zone_ids = list(community_zones_df["grid_index"])
+
+            community_zone_index_map = {}
+            for i, row in community_zones_df.iterrows():
+                community_zone_index_map[row["grid_index"]] = i
+
+            community_zone_ids_set = set(zone_ids)
+            community_zone_neighbor_map = {}
+            for zone_id in zone_ids:
+                if zone_id in zone_neighbor_map:
+                    neighbors = [
+                        neighbor
+                        for neighbor in zone_neighbor_map[zone_id]
+                        if neighbor in community_zone_ids_set
+                    ]
+                    community_zone_neighbor_map[zone_id] = neighbors
+                else:
+                    community_zone_neighbor_map[zone_id] = []
+
+            global_zone_indices = [zone_index_map[zone_id] for zone_id in zone_ids]
+
+            self.zones_in_community[community_id] = global_zone_indices
+            self.community_zone_index_maps[community_id] = community_zone_index_map
+            self.community_zone_neighbor_maps[community_id] = (
+                community_zone_neighbor_map
+            )
 
         self.global_vehicle_counts = np.full(
             self.n_total_zones, self.fleet_size // self.n_total_zones, dtype=int
@@ -132,9 +158,10 @@ class HRLFrameworkEvaluator:
             None
         """
         vehicle_counts_per_community = np.zeros(self.n_communities, dtype=int)
-        for i in range(self.n_communities):
-            vehicle_counts_per_community[i] = self.global_vehicle_counts[
-                self.zones_in_community[i]
+        for community_id, community_index in self.community_index_map.items():
+            global_zone_indices = self.zones_in_community[community_id]
+            vehicle_counts_per_community[community_index] = self.global_vehicle_counts[
+                global_zone_indices
             ].sum()
         return vehicle_counts_per_community
 
@@ -177,11 +204,11 @@ class HRLFrameworkEvaluator:
 
         return torch.tensor(observation, dtype=torch.float32, device=self.device)
 
-    def get_uic_state_observation(self, community_index: int) -> Dict[str, np.ndarray]:
+    def get_uic_state_observation(self, community_id: str) -> Dict[str, np.ndarray]:
         """Get the current state observation for a specific UIC agent.
 
         Args:
-            community_index: index of the community for UIC observation
+            community_id: ID of the community for UIC observation
 
         Returns:
             Dict[str, np.ndarray]: state observation for user incentive coordination
@@ -189,8 +216,10 @@ class HRLFrameworkEvaluator:
         Raises:
             None
         """
-        zones = self.zones_in_community[community_index]
-        vehicle_counts = self.global_vehicle_counts[zones].astype(int).copy()
+        global_zone_indices = self.zones_in_community[community_id]
+        vehicle_counts = (
+            self.global_vehicle_counts[global_zone_indices].astype(np.int32).copy()
+        )
 
         pickup_forecast_full = self.pickup_demand_forecaster.predict_demand_per_zone(
             time_of_day=self.current_time.hour,
@@ -203,8 +232,12 @@ class HRLFrameworkEvaluator:
             month=self.current_time.month,
         )
 
-        pickup_demand_forecast = pickup_forecast_full[zones].astype(np.float32)
-        dropoff_demand_forecast = dropoff_forecast_full[zones].astype(np.float32)
+        pickup_demand_forecast = pickup_forecast_full[global_zone_indices].astype(
+            np.float32
+        )
+        dropoff_demand_forecast = dropoff_forecast_full[global_zone_indices].astype(
+            np.float32
+        )
 
         return {
             "pickup_demand": pickup_demand_forecast,
@@ -241,9 +274,9 @@ class HRLFrameworkEvaluator:
                 self.rdc_agent.action_values[a] for a in rdc_action_inidces
             ]
 
-            _, self.current_vehicle_counts = EscooterRDCEnv.handle_rebalancing(
+            _, self.global_vehicle_counts = EscooterRDCEnv.handle_rebalancing(
                 actions=rdc_allocations,
-                current_vehicle_counts=self.current_vehicle_counts,
+                current_vehicle_counts=self.global_vehicle_counts,
                 community_index_map=self.community_index_map,
                 zone_community_map=self.zone_community_map,
                 zone_index_map=self.zone_index_map,
@@ -253,8 +286,11 @@ class HRLFrameworkEvaluator:
             offered_per_community = [0 for _ in range(self.n_communities)]
 
             for community_id, community_index in self.community_index_map.items():
+                print(
+                    f"Evaluating community {community_id} at step {self.current_step}"
+                )
                 uic_observation = self.get_uic_state_observation(
-                    community_index=community_index
+                    community_id=community_id
                 )
 
                 uic_action, _ = self.uic_agents[community_index].predict(
@@ -279,20 +315,19 @@ class HRLFrameworkEvaluator:
                     )
                 )
 
-                zones = self.zones_in_community[community_index]
+                global_zone_indices = self.zones_in_community[community_id]
 
-                zone_index_map: dict[str, int] = {}
-                for i, row in self.zone_community_map[
+                zone_community_df = self.zone_community_map[
                     self.zone_community_map["community_index"] == community_id
-                ].iterrows():
-                    zone_index_map.update({row["grid_index"]: i})
+                ]
+                zone_ids = list(zone_community_df["grid_index"])
+                zone_id_to_local = self.community_zone_index_maps[community_id]
+                zone_neighbor_map_local = self.community_zone_neighbor_maps[
+                    community_id
+                ]
 
-                zone_ids = list(self.zone_index_map.keys())
-                zone_id_to_local = {
-                    zone_id: idx for idx, zone_id in enumerate(zone_ids)
-                }
                 local_vehicle_counts = (
-                    self.global_vehicle_counts[zones].astype(int).copy()
+                    self.global_vehicle_counts[global_zone_indices].astype(int).copy()
                 )
 
                 local_dropoff_demand, _ = EscooterUICEnv.handle_incentives(
@@ -300,7 +335,7 @@ class HRLFrameworkEvaluator:
                     dropoff_demand=local_dropoff_demand,
                     zone_ids=zone_ids,
                     zone_id_to_local=zone_id_to_local,
-                    zone_neighbor_map=self.zone_neighbor_map,
+                    zone_neighbor_map=zone_neighbor_map_local,
                     user_willingness_fn=self.user_willingness_fn,
                 )
 
@@ -312,6 +347,9 @@ class HRLFrameworkEvaluator:
                         current_vehicle_counts=local_vehicle_counts,
                     )
                 )
+
+                # Update global vehicle counts
+                self.global_vehicle_counts[global_zone_indices] = local_vehicle_counts
 
                 satisfied_per_community[community_index] = total_satisfied_demand
                 offered_per_community[community_index] = offered_demand

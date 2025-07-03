@@ -25,6 +25,8 @@ class DemandProviderImpl(DemandProvider):
         num_zones: int,
         zone_community_map: pd.DataFrame,
         demand_data_path: str,
+        startTime: datetime,
+        endTime: datetime,
     ) -> None:
         """Initialize the DemandProviderImpl with historical data.
 
@@ -43,9 +45,16 @@ class DemandProviderImpl(DemandProvider):
         super().__init__(num_communities, num_zones, zone_community_map)
         self.demand_data_path: str = demand_data_path
         self.demand_data: pd.DataFrame = pd.read_pickle(demand_data_path)
+        self.startDate: datetime = startTime
+        self.endTime: datetime = endTime
 
         self.demand_data.index = pd.to_datetime(self.demand_data.index)
         self.demand_data.sort_index(inplace=True)
+
+        self.demand_data = self.demand_data[
+            (self.demand_data.index >= self.startDate)
+            & (self.demand_data.index <= self.endTime)
+        ]
 
         full_idx = pd.date_range(
             start=self.demand_data.index.min(),

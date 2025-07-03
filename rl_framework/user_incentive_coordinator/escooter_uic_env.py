@@ -289,6 +289,7 @@ class EscooterUICEnv(gym.Env):
         Raises:
             ValueError: if dropoff demand sum changes unexpectedly
         """
+        print(f"Handling incentives for rebalancing. Zones: {len(zone_ids)}")
         total_vehicles_rebalanced = 0
         initial_dropoff = dropoff_demand.copy()
 

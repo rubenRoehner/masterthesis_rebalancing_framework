@@ -1,0 +1,3 @@
+"""
+Demand provider module.
+"""
