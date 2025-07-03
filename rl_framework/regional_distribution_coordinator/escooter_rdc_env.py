@@ -333,15 +333,28 @@ class EscooterRDCEnv(gym.Env):
             month=current_time.month,
         )
 
+        satisfied_pickups = np.zeros(self.n_zones, dtype=int)
         for i in range(self.n_zones):
-            updated_vehicle_count = self.current_vehicle_counts[i] + dropoff_demand[i]
-            if updated_vehicle_count > pickup_demand[i]:
-                updated_vehicle_count -= pickup_demand[i]
-                total_satisfied_demand += pickup_demand[i]
-            else:
-                total_satisfied_demand += updated_vehicle_count
-                updated_vehicle_count = 0
-            self.current_vehicle_counts[i] = updated_vehicle_count
+            satisfied_pickups[i] = min(pickup_demand[i], self.current_vehicle_counts[i])
+            total_satisfied_demand += satisfied_pickups[i]
+            self.current_vehicle_counts[i] -= satisfied_pickups[i]
+
+        total_satisfied_pickups = total_satisfied_demand
+        if total_satisfied_pickups > 0 and dropoff_demand.sum() > 0:
+            dropoff_proportions = dropoff_demand / dropoff_demand.sum()
+            satisfied_dropoffs = (dropoff_proportions * total_satisfied_pickups).astype(
+                int
+            )
+
+            remaining = total_satisfied_pickups - satisfied_dropoffs.sum()
+            if remaining > 0:
+                fractional_parts = (
+                    dropoff_proportions * total_satisfied_pickups
+                ) - satisfied_dropoffs
+                top_zones = np.argsort(fractional_parts)[-remaining:]
+                satisfied_dropoffs[top_zones] += 1
+
+            self.current_vehicle_counts += satisfied_dropoffs
 
         offered_demand = sum(pickup_demand)
         satisfied_demand_ratio = (

@@ -320,7 +320,6 @@ class HRLFrameworkEvaluator:
                             community_id=community_id,
                         )
                     )
-                    offered_demand = len(local_dropoff_demand)
                     local_pickup_demand = (
                         self.pickup_demand_provider.get_demand_per_zone_community(
                             time_of_day=self.current_time.hour,
@@ -329,6 +328,7 @@ class HRLFrameworkEvaluator:
                             community_id=community_id,
                         )
                     )
+                    offered_demand = local_pickup_demand.copy().sum()
 
                     global_zone_indices = self.zones_in_community[community_id]
 
@@ -374,9 +374,11 @@ class HRLFrameworkEvaluator:
                     self.global_vehicle_counts[global_zone_indices] = (
                         local_vehicle_counts
                     )
-
-                    satisfied_per_community[community_index] = total_satisfied_demand
-                    offered_per_community[community_index] = offered_demand
+                    if offered_demand > 0:
+                        satisfied_per_community[community_index] = (
+                            total_satisfied_demand
+                        )
+                        offered_per_community[community_index] = offered_demand
 
                 total_satisfied_all = sum(satisfied_per_community)
                 total_offered_all = sum(offered_per_community)
@@ -413,4 +415,6 @@ class HRLFrameworkEvaluator:
             "mean_rebalanced_vehicles_incentives": np.mean(
                 total_rebalanced_vehicles_incentives
             ),
+            "max_satisfied_ratio": np.max(satisfied_ratio),
+            "min_satisfied_ratio": np.min(satisfied_ratio),
         }

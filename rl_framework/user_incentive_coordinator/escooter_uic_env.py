@@ -330,6 +330,10 @@ class EscooterUICEnv(gym.Env):
     ) -> tuple[np.ndarray, int]:
         """Update vehicle counts based on pickup and dropoff demand.
 
+        Vehicle counts are preserved by only processing satisfied demand.
+        Pickups can only be satisfied if vehicles are available in the zone.
+        Dropoffs only occur for satisfied pickups and equal the total satisfied pickups.
+
         Args:
             n_zones: number of zones in the community
             pickup_demand: pickup demand per zone
@@ -343,16 +347,32 @@ class EscooterUICEnv(gym.Env):
             None
         """
         total_satisfied_demand = 0
+        satisfied_pickups = np.zeros(n_zones, dtype=int)
+
         for i in range(n_zones):
-            updated_vehicle_count = current_vehicle_counts[i] + dropoff_demand[i]
-            if updated_vehicle_count > pickup_demand[i]:
-                updated_vehicle_count -= pickup_demand[i]
-                total_satisfied_demand += pickup_demand[i]
-            else:
-                total_satisfied_demand += updated_vehicle_count
-                updated_vehicle_count = 0
-            current_vehicle_counts[i] = updated_vehicle_count
-        return current_vehicle_counts, total_satisfied_demand
+            satisfied_pickups[i] = min(pickup_demand[i], current_vehicle_counts[i])
+            total_satisfied_demand += satisfied_pickups[i]
+
+        updated_vehicle_counts = current_vehicle_counts - satisfied_pickups
+
+        total_satisfied_pickups = total_satisfied_demand
+        if total_satisfied_pickups > 0 and dropoff_demand.sum() > 0:
+            dropoff_proportions = dropoff_demand / dropoff_demand.sum()
+            satisfied_dropoffs = (dropoff_proportions * total_satisfied_pickups).astype(
+                int
+            )
+
+            remaining = total_satisfied_pickups - satisfied_dropoffs.sum()
+            if remaining > 0:
+                fractional_parts = (
+                    dropoff_proportions * total_satisfied_pickups
+                ) - satisfied_dropoffs
+                top_zones = np.argsort(fractional_parts)[-remaining:]
+                satisfied_dropoffs[top_zones] += 1
+
+            updated_vehicle_counts += satisfied_dropoffs
+
+        return updated_vehicle_counts, total_satisfied_demand
 
     def step(self, action: np.ndarray) -> tuple[dict, float, bool, bool, dict]:
         """Execute one step in the environment.
