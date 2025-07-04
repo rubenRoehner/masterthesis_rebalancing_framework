@@ -21,8 +21,9 @@ from demand_forecasting.IrConv_LSTM_pre_forecaster import (
 )
 from demand_provider.demand_provider_impl import DemandProviderImpl
 
+torch.cuda.set_device(2)
 # global parameters
-FLEET_SIZE = 500
+FLEET_SIZE = 600
 NUM_EPISODES = 1000
 MAX_STEPS_PER_EPISODE = 100
 START_TIME = datetime(2025, 2, 11, 14, 0)

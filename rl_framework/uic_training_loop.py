@@ -294,7 +294,9 @@ def train_uic(community_id: str) -> None:
 
     eval_callback = EvalCallback(
         eval_env=eval_env,
-        best_model_save_path=UIC_TENSORBOARD_LOG + "/outputs/",
+        best_model_save_path=UIC_TENSORBOARD_LOG
+        + "/outputs/uic_best_model/"
+        + community_id,
         log_path=UIC_TENSORBOARD_LOG + "/outputs/eval_logs/",
         eval_freq=100,
     )
@@ -327,7 +329,11 @@ def train_uic(community_id: str) -> None:
     )
 
     agent.model.save(
-        UIC_TENSORBOARD_LOG + "/outputs/" + community_id + "_user_incentive_coordinator"
+        UIC_TENSORBOARD_LOG
+        + "/outputs/"
+        + community_id
+        + "_UIC_"
+        + datetime.now().strftime("%Y%m%d-%H%M%S")
     )
 
     print("Training completed.")
