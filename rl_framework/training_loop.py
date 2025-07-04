@@ -23,7 +23,8 @@ from demand_provider.demand_provider_impl import DemandProviderImpl
 
 torch.cuda.set_device(2)
 # global parameters
-FLEET_SIZE = 600
+# Mean in GBFS data is around 900 scooters
+FLEET_SIZE = 810
 NUM_EPISODES = 1000
 MAX_STEPS_PER_EPISODE = 100
 START_TIME = datetime(2025, 2, 11, 14, 0)

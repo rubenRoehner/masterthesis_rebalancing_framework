@@ -6,6 +6,15 @@ This script uses Optuna to perform Bayesian optimization of hyperparameters
 for the multi-head DQN-based Regional Distribution Coordinator agent in e-scooter fleet management.
 """
 
+import sys
+import os
+
+# Add the parent directories to Python path
+sys.path.append(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from datetime import datetime, timedelta
 import torch
 import pandas as pd
@@ -26,11 +35,11 @@ from demand_forecasting.IrConv_LSTM_pre_forecaster import (
 from demand_provider.demand_provider_impl import DemandProviderImpl
 
 
-OPTIMIZE_REPLAY_BUFFER = True
-OPTIMIZE_ARCHITECTURE = True
 OPTIMIZE_LEARNING_RATE = True
-OPTIMIZE_EXPLORATION = True
-OPTIMIZE_REWARD_WEIGHTS = True
+OPTIMIZE_REPLAY_BUFFER = False
+OPTIMIZE_ARCHITECTURE = False
+OPTIMIZE_EXPLORATION = False
+OPTIMIZE_REWARD_WEIGHTS = False
 
 FLAG_LABELS = {
     "OPTIMIZE_REPLAY_BUFFER": "replaybuffer",
@@ -54,14 +63,16 @@ timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
 study_filename = f"rdc_ho_{study_label}_{timestamp}"
 
-N_TRIALS = 100
+N_TRIALS = 50
 
 # global parameters
-FLEET_SIZE = 500
+FLEET_SIZE = 810
 N_TRAINING_EPISODES = 100
 N_EVAL_EPISODES = 20
 MAX_STEPS_PER_EPISODE = 100
 START_TIME = datetime(2025, 2, 11, 14, 0)
+END_TIME = datetime(2025, 5, 4, 15, 0)
+EVAL_END_TIME = datetime(2025, 5, 18, 15, 0)
 
 output_dir = "ho_results"
 os.makedirs(output_dir, exist_ok=True)
@@ -113,6 +124,8 @@ dropoff_demand_provider = DemandProviderImpl(
     num_zones=N_ZONES,
     zone_community_map=ZONE_COMMUNITY_MAP,
     demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
+    startTime=START_TIME,
+    endTime=END_TIME,
 )
 
 pickup_demand_provider = DemandProviderImpl(
@@ -120,6 +133,26 @@ pickup_demand_provider = DemandProviderImpl(
     num_zones=N_ZONES,
     zone_community_map=ZONE_COMMUNITY_MAP,
     demand_data_path=PICK_UP_DEMAND_DATA_PATH,
+    startTime=START_TIME,
+    endTime=END_TIME,
+)
+
+eval_dropoff_demand_provider = DemandProviderImpl(
+    num_communities=N_COMMUNITIES,
+    num_zones=N_ZONES,
+    zone_community_map=ZONE_COMMUNITY_MAP,
+    demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
+    startTime=END_TIME,
+    endTime=EVAL_END_TIME,
+)
+
+eval_pickup_demand_provider = DemandProviderImpl(
+    num_communities=N_COMMUNITIES,
+    num_zones=N_ZONES,
+    zone_community_map=ZONE_COMMUNITY_MAP,
+    demand_data_path=PICK_UP_DEMAND_DATA_PATH,
+    startTime=END_TIME,
+    endTime=EVAL_END_TIME,
 )
 
 torch.cuda.set_device(3)
@@ -170,18 +203,18 @@ def objective(trial: optuna.Trial) -> float:
     # --- HYPERPARAMETERS ---
     if OPTIMIZE_REPLAY_BUFFER:
         RDC_REPLAY_BUFFER_CAPACITY = trial.suggest_int(
-            "rdc_replay_buffer_capacity", 5_000, 10_000, step=2_500
+            "rdc_replay_buffer_capacity", 5_000, 20_000, step=5000
         )
         RDC_REPLAY_BUFFER_ALPHA = trial.suggest_float(
-            "rdc_replay_buffer_alpha", 0.60, 0.80, step=0.05
+            "rdc_replay_buffer_alpha", 0.30, 0.80, step=0.1
         )
         RDC_REPLAY_BUFFER_BETA_START = trial.suggest_float(
-            "rdc_replay_buffer_beta_start", 0.25, 0.50, step=0.05
+            "rdc_replay_buffer_beta_start", 0.2, 0.6, step=0.1
         )
         RDC_REPLAY_BUFFER_BETA_FRAMES = trial.suggest_int(
-            "rdc_replay_buffer_beta_frames", 50_000, 150_000, step=25_000
+            "rdc_replay_buffer_beta_frames", 50_000, 200_000, step=50_000
         )
-        RDC_TAU = trial.suggest_float("rdc_tau", 0.005, 0.010, step=0.001)
+        RDC_TAU = trial.suggest_float("rdc_tau", 0.001, 0.01, step=0.001)
     else:
         # 16,5000,0.6,0.5,50000,0.005,97.52000816810578
         RDC_REPLAY_BUFFER_CAPACITY = 5_000
@@ -191,18 +224,22 @@ def objective(trial: optuna.Trial) -> float:
         RDC_TAU = 0.005
 
     if OPTIMIZE_ARCHITECTURE:
-        RDC_BATCH_SIZE = trial.suggest_categorical("rdc_batch_size", [256, 512])
-        RDC_HIDDEN_DIM = trial.suggest_categorical("rdc_hidden_dim", [128, 256])
+        RDC_BATCH_SIZE = trial.suggest_categorical(
+            "rdc_batch_size", [64, 128, 256, 512]
+        )
+        RDC_HIDDEN_DIM = trial.suggest_categorical(
+            "rdc_hidden_dim", [64, 128, 256, 512]
+        )
     else:
         # 2,256,256,96.65786108532586
         RDC_BATCH_SIZE = 256
         RDC_HIDDEN_DIM = 256
 
     if OPTIMIZE_LEARNING_RATE:
-        RDC_LR = trial.suggest_float("rdc_lr", 1e-6, 1e-5, log=True)
-        RDC_LR_STEP_SIZE = trial.suggest_int("rdc_lr_step_size", 1500, 2000, step=250)
-        RDC_LR_GAMMA = trial.suggest_float("rdc_lr_gamma", 0.9, 1.0, step=0.05)
-        RDC_GAMMA = trial.suggest_float("rdc_gamma", 0.95, 0.99, step=0.01)
+        RDC_LR = trial.suggest_float("rdc_lr", 1e-6, 1e-3, log=True)
+        RDC_LR_STEP_SIZE = trial.suggest_int("rdc_lr_step_size", 500, 3000, step=500)
+        RDC_LR_GAMMA = trial.suggest_float("rdc_lr_gamma", 0.9, 0.99, step=0.01)
+        RDC_GAMMA = trial.suggest_float("rdc_gamma", 0.9, 0.99, step=0.01)
     else:
         # 5.0345862337612e-06,1750,1.0,0.99,97.72724927461262
         RDC_LR = 5.0345862337612e-06
@@ -212,9 +249,9 @@ def objective(trial: optuna.Trial) -> float:
 
     RDC_EPSILON_START = 1.0
     if OPTIMIZE_EXPLORATION:
-        RDC_EPSILON_END = trial.suggest_float("rdc_epsilon_end", 0.03, 0.05, step=0.005)
+        RDC_EPSILON_END = trial.suggest_float("rdc_epsilon_end", 0.02, 0.2, step=0.01)
         RDC_EPSILON_DECAY = trial.suggest_float(
-            "rdc_epsilon_decay", 0.998, 0.9999, step=0.0001
+            "rdc_epsilon_decay", 0.990, 0.999, step=0.001
         )
     else:
         # 27,0.04,0.9983,97.58201458861882
@@ -223,13 +260,13 @@ def objective(trial: optuna.Trial) -> float:
 
     if OPTIMIZE_REWARD_WEIGHTS:
         RDC_REWARD_WEIGHT_DEMAND = trial.suggest_float(
-            "rdc_reward_weight_demand", 1.2, 1.6, step=0.05
+            "rdc_reward_weight_demand", 0.2, 2.0, step=0.1
         )
         RDC_REWARD_WEIGHT_REBALANCING = trial.suggest_float(
-            "rdc_reward_weight_rebalancing", 0.90, 1.20, step=0.05
+            "rdc_reward_weight_rebalancing", 0.2, 2.0, step=0.1
         )
         RDC_REWARD_WEIGHT_GINI = trial.suggest_float(
-            "rdc_reward_weight_gini", 0.05, 0.10, step=0.01
+            "rdc_reward_weight_gini", 0.0, 0.50, step=0.05
         )
     else:
         # 26,1.4,1.05,0.07,98.27922198476875
@@ -276,8 +313,8 @@ def objective(trial: optuna.Trial) -> float:
         community_index_map=COMMUNITY_INDEX_MAP,
         dropoff_demand_forecaster=dropoff_demand_forecaster,
         pickup_demand_forecaster=pickup_demand_forecaster,
-        dropoff_demand_provider=dropoff_demand_provider,
-        pickup_demand_provider=pickup_demand_provider,
+        dropoff_demand_provider=eval_dropoff_demand_provider,
+        pickup_demand_provider=eval_pickup_demand_provider,
         device=device,
         fleet_size=FLEET_SIZE,
     )

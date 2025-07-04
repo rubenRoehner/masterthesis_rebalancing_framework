@@ -33,20 +33,43 @@ from stable_baselines3.common.callbacks import EvalCallback
 import csv
 import os
 
+OPTIMIZE_PPO_CORE = True
+OPTIMIZE_ARCHITECTURE = False
+OPTIMIZE_STABILITY = False
+OPTIMIZE_REWARD_WEIGHTS = False
+
+FLAG_LABELS = {
+    "OPTIMIZE_PPO_CORE": "ppo-core",
+    "OPTIMIZE_ARCHITECTURE": "architecture",
+    "OPTIMIZE_STABILITY": "stability",
+    "OPTIMIZE_REWARD_WEIGHTS": "rewardweights",
+}
+
+active_flags = [
+    label for flag, label in FLAG_LABELS.items() if globals().get(flag, False)
+]
+if not active_flags:
+    study_label = "default"
+elif len(active_flags) == len(FLAG_LABELS):
+    study_label = "final_joint"
+else:
+    study_label = active_flags[0]
+
 timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
-study_filename = f"uic_ho_{timestamp}"
+study_filename = f"uic_ho_{study_label}_{timestamp}"
 output_dir = "ho_results"
 os.makedirs(output_dir, exist_ok=True)
 N_TRIALS = 30
 
 # global parameters
 COMMUNITY_ID = "861faa7afffffff"
-FLEET_SIZE = 40
+FLEET_SIZE = 90
 N_EPOCHS = 20
 MAX_STEPS_PER_EPISODE = 256
-TOTAL_TIME_STEPS = 30_000
+TOTAL_TIME_STEPS = 50_000
 START_TIME = datetime(2025, 2, 11, 14, 0)
+END_TIME = datetime(2025, 5, 18, 15, 0)
 
 N_WORKERS = 1
 BASE_SEED = 42
@@ -55,8 +78,8 @@ BASE_SEED = 42
 UIC_STEP_DURATION = 60  # in minutes
 
 REWARD_WEIGHT_DEMAND = 1.0
-REWARD_WEIGHT_REBALANCING = 0.5
-REWARD_WEIGHT_GINI = 0.25
+REWARD_WEIGHT_REBALANCING = 0.25
+REWARD_WEIGHT_GINI = 0.1
 
 UIC_POLICY = "MultiInputPolicy"
 UIC_N_STEPS = 64
@@ -66,6 +89,15 @@ UIC_GAE_LAMBDA = 0.95
 UIC_CLIP_RANGE = 0.29
 UIC_ENT_COEF = 0.07
 UIC_BATCH_SIZE = 64
+UIC_VF_COEF = 0.5
+UIC_POLICY_KWARGS = {
+    "net_arch": dict(
+        pi=[256, 256, 256],
+        vf=[256, 256, 256],
+    ),
+    "activation_fn": torch.nn.ReLU,
+}
+
 UIC_VERBOSE = 1
 UIC_TENSORBOARD_LOG = "rl_framework/runs/"
 
@@ -127,6 +159,8 @@ dropoff_demand_provider = DemandProviderImpl(
     num_zones=N_TOTAL_ZONES,
     zone_community_map=ZONE_COMMUNITY_MAP,
     demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
+    startTime=START_TIME,
+    endTime=END_TIME,
 )
 
 pickup_demand_provider = DemandProviderImpl(
@@ -134,6 +168,8 @@ pickup_demand_provider = DemandProviderImpl(
     num_zones=N_TOTAL_ZONES,
     zone_community_map=ZONE_COMMUNITY_MAP,
     demand_data_path=PICK_UP_DEMAND_DATA_PATH,
+    startTime=START_TIME,
+    endTime=END_TIME,
 )
 
 torch.cuda.set_device(2)
@@ -239,41 +275,74 @@ def objective(trial: optuna.Trial) -> float:
     Raises:
         None
     """
-    learning_rate = trial.suggest_float("learning_rate", 1e-6, 2e-4, log=True)
-    n_steps = trial.suggest_categorical("n_steps", [256, 512])
-    batch_size = trial.suggest_categorical("batch_size", [32, 64])
-    gamma = trial.suggest_float("gamma", 0.88, 0.95, step=0.001)
-    clip_range = trial.suggest_float("clip_range", 0.12, 0.22, step=0.01)
-    ent_coef = trial.suggest_float("ent_coef", 1e-6, 1e-2, log=True)
-    vf_coef = trial.suggest_float("vf_coef", 0.1, 1.0, step=0.1)
-
-    raw_target_kl = trial.suggest_categorical(
-        "use_target_kl", [None, 0.005, 0.01, 0.02]
-    )
-    if raw_target_kl is None:
-        target_kl: float | None = None
+    if OPTIMIZE_PPO_CORE:
+        learning_rate = trial.suggest_float("learning_rate", 1e-6, 2e-4, log=True)
+        n_steps = trial.suggest_categorical("n_steps", [256, 512])
+        batch_size = trial.suggest_categorical("batch_size", [32, 64])
+        clip_range = trial.suggest_float("clip_range", 0.12, 0.22, step=0.01)
+        ent_coef = trial.suggest_float("ent_coef", 1e-6, 1e-2, log=True)
+        vf_coef = trial.suggest_float("vf_coef", 0.1, 1.0, step=0.1)
     else:
-        target_kl = float(raw_target_kl)
+        learning_rate = UIC_LEARNING_RATE
+        n_steps = UIC_N_STEPS
+        batch_size = UIC_BATCH_SIZE
+        clip_range = UIC_CLIP_RANGE
+        ent_coef = UIC_ENT_COEF
+        vf_coef = UIC_VF_COEF
 
-    n_layers = trial.suggest_int("n_layers", 2, 3)
-    hidden_size = trial.suggest_categorical("hidden_size", [64, 128, 256])
-    activation_name = trial.suggest_categorical(
-        "activation", ["ReLU", "Tanh", "LeakyReLU"]
-    )
-    if activation_name == "ReLU":
-        activation_fn = torch.nn.ReLU
-    elif activation_name == "Tanh":
-        activation_fn = torch.nn.Tanh
+    if OPTIMIZE_ARCHITECTURE:
+        n_layers = trial.suggest_int("n_layers", 2, 3)
+        hidden_size = trial.suggest_categorical("hidden_size", [64, 128, 256])
+        activation_name = trial.suggest_categorical(
+            "activation", ["ReLU", "Tanh", "LeakyReLU"]
+        )
+        if activation_name == "ReLU":
+            activation_fn = torch.nn.ReLU
+        elif activation_name == "Tanh":
+            activation_fn = torch.nn.Tanh
+        else:
+            activation_fn = torch.nn.LeakyReLU
+
+        policy_kwargs = {
+            "net_arch": dict(
+                pi=[hidden_size] * n_layers,
+                vf=[hidden_size] * n_layers,
+            ),
+            "activation_fn": activation_fn,
+        }
     else:
-        activation_fn = torch.nn.LeakyReLU
+        policy_kwargs = UIC_POLICY_KWARGS
 
-    policy_kwargs = {
-        "net_arch": dict(
-            pi=[hidden_size] * n_layers,
-            vf=[hidden_size] * n_layers,
-        ),
-        "activation_fn": activation_fn,
-    }
+    if OPTIMIZE_STABILITY:
+        gamma = trial.suggest_float("gamma", 0.88, 0.95, step=0.001)
+        gae_lambda = trial.suggest_float("gae_lambda", 0.85, 0.95, step=0.01)
+
+        raw_target_kl = trial.suggest_categorical(
+            "use_target_kl", [None, 0.005, 0.01, 0.02]
+        )
+        if raw_target_kl is None:
+            target_kl: float | None = None
+        else:
+            target_kl = float(raw_target_kl)
+    else:
+        gamma = UIC_GAMMA
+        gae_lambda = UIC_GAE_LAMBDA
+        target_kl = None
+
+    if OPTIMIZE_REWARD_WEIGHTS:
+        reward_weight_demand = trial.suggest_float(
+            "reward_weight_demand", 0.2, 2.0, step=0.1
+        )
+        reward_weight_rebalancing = trial.suggest_float(
+            "reward_weight_rebalancing", 0.2, 2.0, step=0.1
+        )
+        reward_weight_gini = trial.suggest_float(
+            "reward_weight_gini", 0.0, 0.5, step=0.01
+        )
+    else:
+        reward_weight_demand = REWARD_WEIGHT_DEMAND
+        reward_weight_rebalancing = REWARD_WEIGHT_REBALANCING
+        reward_weight_gini = REWARD_WEIGHT_GINI
 
     escooter_env = EscooterUICEnv(
         community_id=COMMUNITY_ID,
@@ -290,9 +359,9 @@ def objective(trial: optuna.Trial) -> float:
         max_steps=MAX_STEPS_PER_EPISODE,
         start_time=START_TIME,
         step_duration=timedelta(minutes=UIC_STEP_DURATION),
-        reward_weight_demand=REWARD_WEIGHT_DEMAND,
-        reward_weight_rebalancing=REWARD_WEIGHT_REBALANCING,
-        reward_weight_gini=REWARD_WEIGHT_GINI,
+        reward_weight_demand=reward_weight_demand,
+        reward_weight_rebalancing=reward_weight_rebalancing,
+        reward_weight_gini=reward_weight_gini,
     )
 
     train_envs = SubprocVecEnv(
@@ -331,7 +400,7 @@ def objective(trial: optuna.Trial) -> float:
         n_epochs=N_EPOCHS,
         batch_size=batch_size,
         gamma=gamma,
-        gae_lambda=UIC_GAE_LAMBDA,
+        gae_lambda=gae_lambda,
         clip_range=clip_range,
         ent_coef=ent_coef,
         verbose=0,
