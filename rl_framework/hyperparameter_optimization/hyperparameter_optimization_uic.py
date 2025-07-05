@@ -6,6 +6,15 @@ This script uses Optuna to perform Bayesian optimization of hyperparameters
 for the PPO-based User Incentive Coordinator agent in e-scooter rebalancing.
 """
 
+import sys
+import os
+
+# Add the parent directories to Python path
+sys.path.append(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from datetime import datetime, timedelta
 import torch
 import pandas as pd
@@ -33,8 +42,8 @@ from stable_baselines3.common.callbacks import EvalCallback
 import csv
 import os
 
-OPTIMIZE_PPO_CORE = True
-OPTIMIZE_ARCHITECTURE = False
+OPTIMIZE_PPO_CORE = False
+OPTIMIZE_ARCHITECTURE = True
 OPTIMIZE_STABILITY = False
 OPTIMIZE_REWARD_WEIGHTS = False
 
@@ -69,7 +78,8 @@ N_EPOCHS = 20
 MAX_STEPS_PER_EPISODE = 256
 TOTAL_TIME_STEPS = 50_000
 START_TIME = datetime(2025, 2, 11, 14, 0)
-END_TIME = datetime(2025, 5, 18, 15, 0)
+END_TIME = datetime(2025, 5, 4, 15, 0)
+EVAL_END_TIME = datetime(2025, 5, 18, 15, 0)
 
 N_WORKERS = 1
 BASE_SEED = 42
@@ -82,14 +92,17 @@ REWARD_WEIGHT_REBALANCING = 0.25
 REWARD_WEIGHT_GINI = 0.1
 
 UIC_POLICY = "MultiInputPolicy"
-UIC_N_STEPS = 64
-UIC_LEARNING_RATE = 3e-4
+
+# 10,1.6272481443527056e-06,512,32,0.16999999999999998,0.0046828228903401685,0.7000000000000001,181.476114
+UIC_LEARNING_RATE = 1.6272481443527056e-06
+UIC_N_STEPS = 512
+UIC_BATCH_SIZE = 32
+UIC_CLIP_RANGE = 0.17
+UIC_ENT_COEF = 0.0047
+UIC_VF_COEF = 0.7
+
 UIC_GAMMA = 0.918
 UIC_GAE_LAMBDA = 0.95
-UIC_CLIP_RANGE = 0.29
-UIC_ENT_COEF = 0.07
-UIC_BATCH_SIZE = 64
-UIC_VF_COEF = 0.5
 UIC_POLICY_KWARGS = {
     "net_arch": dict(
         pi=[256, 256, 256],
@@ -170,6 +183,23 @@ pickup_demand_provider = DemandProviderImpl(
     demand_data_path=PICK_UP_DEMAND_DATA_PATH,
     startTime=START_TIME,
     endTime=END_TIME,
+)
+
+eval_dropoff_demand_provider = DemandProviderImpl(
+    num_communities=NUM_COMMUNITIES,
+    num_zones=N_TOTAL_ZONES,
+    zone_community_map=ZONE_COMMUNITY_MAP,
+    demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
+    startTime=END_TIME,
+    endTime=EVAL_END_TIME,
+)
+eval_pickup_demand_provider = DemandProviderImpl(
+    num_communities=NUM_COMMUNITIES,
+    num_zones=N_TOTAL_ZONES,
+    zone_community_map=ZONE_COMMUNITY_MAP,
+    demand_data_path=PICK_UP_DEMAND_DATA_PATH,
+    startTime=END_TIME,
+    endTime=EVAL_END_TIME,
 )
 
 torch.cuda.set_device(2)
@@ -350,8 +380,8 @@ def objective(trial: optuna.Trial) -> float:
         fleet_size=FLEET_SIZE,
         dropoff_demand_forecaster=dropoff_demand_forecaster,
         pickup_demand_forecaster=pickup_demand_forecaster,
-        dropoff_demand_provider=dropoff_demand_provider,
-        pickup_demand_provider=pickup_demand_provider,
+        dropoff_demand_provider=eval_dropoff_demand_provider,
+        pickup_demand_provider=eval_pickup_demand_provider,
         device=device,
         zone_neighbor_map=ZONE_NEIGHBOR_MAP,
         zone_index_map=ZONE_INDEX_MAP,
@@ -427,7 +457,7 @@ if __name__ == "__main__":
     study.optimize(
         objective,
         n_trials=N_TRIALS,
-        n_jobs=1,
+        n_jobs=-1,
         callbacks=[save_trial_callback],
     )
 

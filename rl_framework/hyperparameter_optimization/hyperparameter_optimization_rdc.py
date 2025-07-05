@@ -399,7 +399,7 @@ if __name__ == "__main__":
     study.optimize(
         objective,
         n_trials=N_TRIALS,
-        n_jobs=5,
+        n_jobs=-1,
         callbacks=[save_trial_callback],
     )
 
