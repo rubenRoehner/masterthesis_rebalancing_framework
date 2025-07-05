@@ -35,8 +35,8 @@ from demand_forecasting.IrConv_LSTM_pre_forecaster import (
 from demand_provider.demand_provider_impl import DemandProviderImpl
 
 
-OPTIMIZE_LEARNING_RATE = True
-OPTIMIZE_REPLAY_BUFFER = False
+OPTIMIZE_LEARNING_RATE = False
+OPTIMIZE_REPLAY_BUFFER = True
 OPTIMIZE_ARCHITECTURE = False
 OPTIMIZE_EXPLORATION = False
 OPTIMIZE_REWARD_WEIGHTS = False
@@ -241,11 +241,11 @@ def objective(trial: optuna.Trial) -> float:
         RDC_LR_GAMMA = trial.suggest_float("rdc_lr_gamma", 0.9, 0.99, step=0.01)
         RDC_GAMMA = trial.suggest_float("rdc_gamma", 0.9, 0.99, step=0.01)
     else:
-        # 5.0345862337612e-06,1750,1.0,0.99,97.72724927461262
-        RDC_LR = 5.0345862337612e-06
-        RDC_LR_STEP_SIZE = 1750
-        RDC_LR_GAMMA = 0.99
-        RDC_GAMMA = 0.99
+        # 34: 2.3655256071124346e-06,3000,0.9400000000000001,0.97,98.51578093840777
+        RDC_LR = 2.3655256071124346e-06
+        RDC_LR_STEP_SIZE = 3000
+        RDC_LR_GAMMA = 0.94
+        RDC_GAMMA = 0.97
 
     RDC_EPSILON_START = 1.0
     if OPTIMIZE_EXPLORATION:
