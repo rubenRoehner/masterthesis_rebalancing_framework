@@ -36,8 +36,8 @@ from demand_provider.demand_provider_impl import DemandProviderImpl
 
 
 OPTIMIZE_LEARNING_RATE = False
-OPTIMIZE_REPLAY_BUFFER = True
-OPTIMIZE_ARCHITECTURE = False
+OPTIMIZE_REPLAY_BUFFER = False
+OPTIMIZE_ARCHITECTURE = True
 OPTIMIZE_EXPLORATION = False
 OPTIMIZE_REWARD_WEIGHTS = False
 
@@ -217,11 +217,16 @@ def objective(trial: optuna.Trial) -> float:
         RDC_TAU = trial.suggest_float("rdc_tau", 0.001, 0.01, step=0.001)
     else:
         # 16,5000,0.6,0.5,50000,0.005,97.52000816810578
-        RDC_REPLAY_BUFFER_CAPACITY = 5_000
-        RDC_REPLAY_BUFFER_ALPHA = 0.6
+        # rdc_replay_buffer_capacity: 15000
+        # rdc_replay_buffer_alpha: 0.4
+        # rdc_replay_buffer_beta_start: 0.5
+        # rdc_replay_buffer_beta_frames: 50_000
+        # ‚rdc_tau: 0.007
+        RDC_REPLAY_BUFFER_CAPACITY = 15_000
+        RDC_REPLAY_BUFFER_ALPHA = 0.4
         RDC_REPLAY_BUFFER_BETA_START = 0.5
         RDC_REPLAY_BUFFER_BETA_FRAMES = 50_000
-        RDC_TAU = 0.005
+        RDC_TAU = 0.007
 
     if OPTIMIZE_ARCHITECTURE:
         RDC_BATCH_SIZE = trial.suggest_categorical(
@@ -399,7 +404,7 @@ if __name__ == "__main__":
     study.optimize(
         objective,
         n_trials=N_TRIALS,
-        n_jobs=-1,
+        n_jobs=5,
         callbacks=[save_trial_callback],
     )
 
