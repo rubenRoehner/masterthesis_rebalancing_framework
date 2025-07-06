@@ -43,8 +43,8 @@ import csv
 import os
 
 OPTIMIZE_PPO_CORE = False
-OPTIMIZE_ARCHITECTURE = True
-OPTIMIZE_STABILITY = False
+OPTIMIZE_ARCHITECTURE = False
+OPTIMIZE_STABILITY = True
 OPTIMIZE_REWARD_WEIGHTS = False
 
 FLAG_LABELS = {
@@ -103,10 +103,12 @@ UIC_VF_COEF = 0.5
 
 UIC_GAMMA = 0.918
 UIC_GAE_LAMBDA = 0.95
+
+# {'n_layers': 3, 'hidden_size': 128, 'activation': 'ReLU'}
 UIC_POLICY_KWARGS = {
     "net_arch": dict(
-        pi=[256, 256, 256],
-        vf=[256, 256, 256],
+        pi=[128, 128, 128],
+        vf=[128, 128, 128],
     ),
     "activation_fn": torch.nn.ReLU,
 }
@@ -457,7 +459,7 @@ if __name__ == "__main__":
     study.optimize(
         objective,
         n_trials=N_TRIALS,
-        n_jobs=-1,
+        n_jobs=1,
         callbacks=[save_trial_callback],
     )
 
