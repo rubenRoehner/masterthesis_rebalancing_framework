@@ -42,10 +42,10 @@ from stable_baselines3.common.callbacks import EvalCallback
 import csv
 import os
 
-OPTIMIZE_PPO_CORE = False
+OPTIMIZE_PPO_CORE = True
 OPTIMIZE_ARCHITECTURE = False
 OPTIMIZE_STABILITY = False
-OPTIMIZE_REWARD_WEIGHTS = True
+OPTIMIZE_REWARD_WEIGHTS = False
 
 FLAG_LABELS = {
     "OPTIMIZE_PPO_CORE": "ppo-core",
@@ -87,9 +87,9 @@ BASE_SEED = 42
 # UIC parameters
 UIC_STEP_DURATION = 60  # in minutes
 
-REWARD_WEIGHT_DEMAND = 1.0
-REWARD_WEIGHT_REBALANCING = 0.25
-REWARD_WEIGHT_GINI = 0.1
+REWARD_WEIGHT_DEMAND = 0.5
+REWARD_WEIGHT_REBALANCING = 0.9
+REWARD_WEIGHT_GINI = 0.12
 
 UIC_POLICY = "MultiInputPolicy"
 
@@ -310,12 +310,12 @@ def objective(trial: optuna.Trial) -> float:
         None
     """
     if OPTIMIZE_PPO_CORE:
-        learning_rate = trial.suggest_float("learning_rate", 1e-6, 2e-4, log=True)
-        n_steps = trial.suggest_categorical("n_steps", [256, 512])
+        learning_rate = trial.suggest_float("learning_rate", 1e-6, 3e-5, log=True)
+        n_steps = trial.suggest_categorical("n_steps", [512, 1024])
         batch_size = trial.suggest_categorical("batch_size", [32, 64])
-        clip_range = trial.suggest_float("clip_range", 0.12, 0.22, step=0.01)
-        ent_coef = trial.suggest_float("ent_coef", 1e-6, 1e-2, log=True)
-        vf_coef = trial.suggest_float("vf_coef", 0.1, 1.0, step=0.1)
+        clip_range = trial.suggest_float("clip_range", 0.1, 0.24, step=0.01)
+        ent_coef = trial.suggest_float("ent_coef", 1e-6, 5e-3, log=True)
+        vf_coef = trial.suggest_float("vf_coef", 0.28, 1.12, step=0.1)
     else:
         learning_rate = UIC_LEARNING_RATE
         n_steps = UIC_N_STEPS
@@ -327,9 +327,7 @@ def objective(trial: optuna.Trial) -> float:
     if OPTIMIZE_ARCHITECTURE:
         n_layers = trial.suggest_int("n_layers", 2, 3)
         hidden_size = trial.suggest_categorical("hidden_size", [64, 128, 256])
-        activation_name = trial.suggest_categorical(
-            "activation", ["ReLU", "Tanh", "LeakyReLU"]
-        )
+        activation_name = trial.suggest_categorical("activation", ["ReLU", "Tanh"])
         if activation_name == "ReLU":
             activation_fn = torch.nn.ReLU
         elif activation_name == "Tanh":
@@ -348,11 +346,11 @@ def objective(trial: optuna.Trial) -> float:
         policy_kwargs = UIC_POLICY_KWARGS
 
     if OPTIMIZE_STABILITY:
-        gamma = trial.suggest_float("gamma", 0.88, 0.95, step=0.001)
-        gae_lambda = trial.suggest_float("gae_lambda", 0.85, 0.95, step=0.01)
+        gamma = trial.suggest_float("gamma", 0.9132, 0.9538, step=0.001)
+        gae_lambda = trial.suggest_float("gae_lambda", 0.878, 0.962, step=0.01)
 
         raw_target_kl = trial.suggest_categorical(
-            "use_target_kl", [None, 0.005, 0.01, 0.02]
+            "use_target_kl", [0.008, 0.01, 0.02, 0.022]
         )
         if raw_target_kl is None:
             target_kl: float | None = None
@@ -365,13 +363,13 @@ def objective(trial: optuna.Trial) -> float:
 
     if OPTIMIZE_REWARD_WEIGHTS:
         reward_weight_demand = trial.suggest_float(
-            "reward_weight_demand", 0.2, 2.0, step=0.1
+            "reward_weight_demand", 0.1, 1.0, step=0.1
         )
         reward_weight_rebalancing = trial.suggest_float(
-            "reward_weight_rebalancing", 0.2, 2.0, step=0.1
+            "reward_weight_rebalancing", 0.8, 2.0, step=0.1
         )
         reward_weight_gini = trial.suggest_float(
-            "reward_weight_gini", 0.0, 0.5, step=0.01
+            "reward_weight_gini", 0.0, 0.4, step=0.01
         )
     else:
         reward_weight_demand = REWARD_WEIGHT_DEMAND
