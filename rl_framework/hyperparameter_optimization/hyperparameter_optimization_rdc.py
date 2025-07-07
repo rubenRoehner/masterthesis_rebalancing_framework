@@ -37,8 +37,8 @@ from demand_provider.demand_provider_impl import DemandProviderImpl
 
 OPTIMIZE_LEARNING_RATE = False
 OPTIMIZE_REPLAY_BUFFER = False
-OPTIMIZE_ARCHITECTURE = True
-OPTIMIZE_EXPLORATION = False
+OPTIMIZE_ARCHITECTURE = False
+OPTIMIZE_EXPLORATION = True
 OPTIMIZE_REWARD_WEIGHTS = False
 
 FLAG_LABELS = {
@@ -221,7 +221,7 @@ def objective(trial: optuna.Trial) -> float:
         # rdc_replay_buffer_alpha: 0.4
         # rdc_replay_buffer_beta_start: 0.5
         # rdc_replay_buffer_beta_frames: 50_000
-        # ‚rdc_tau: 0.007
+        # rdc_tau: 0.007
         RDC_REPLAY_BUFFER_CAPACITY = 15_000
         RDC_REPLAY_BUFFER_ALPHA = 0.4
         RDC_REPLAY_BUFFER_BETA_START = 0.5
@@ -237,8 +237,10 @@ def objective(trial: optuna.Trial) -> float:
         )
     else:
         # 2,256,256,96.65786108532586
+        # rdc_batch_size: 256
+        # rdc_hidden_dim: 512
         RDC_BATCH_SIZE = 256
-        RDC_HIDDEN_DIM = 256
+        RDC_HIDDEN_DIM = 512
 
     if OPTIMIZE_LEARNING_RATE:
         RDC_LR = trial.suggest_float("rdc_lr", 1e-6, 1e-3, log=True)
@@ -246,7 +248,10 @@ def objective(trial: optuna.Trial) -> float:
         RDC_LR_GAMMA = trial.suggest_float("rdc_lr_gamma", 0.9, 0.99, step=0.01)
         RDC_GAMMA = trial.suggest_float("rdc_gamma", 0.9, 0.99, step=0.01)
     else:
-        # 34: 2.3655256071124346e-06,3000,0.9400000000000001,0.97,98.51578093840777
+        # LR: 2.3655256071124346e-06
+        # LR_STEP_SIZE: 3000
+        # LR_GAMMA: 0.9400000000000001
+        # GAMMA: 0.97
         RDC_LR = 2.3655256071124346e-06
         RDC_LR_STEP_SIZE = 3000
         RDC_LR_GAMMA = 0.94
