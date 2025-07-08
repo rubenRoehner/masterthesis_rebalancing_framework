@@ -348,8 +348,8 @@ def objective(trial: optuna.Trial) -> float:
         policy_kwargs = UIC_POLICY_KWARGS
 
     if OPTIMIZE_STABILITY:
-        gamma = trial.suggest_float("gamma", 0.9132, 0.9538, step=0.001)
-        gae_lambda = trial.suggest_float("gae_lambda", 0.878, 0.962, step=0.01)
+        gamma = trial.suggest_float("gamma", 0.913, 0.954, step=0.001)
+        gae_lambda = trial.suggest_float("gae_lambda", 0.878, 0.962, step=0.001)
 
         raw_target_kl = trial.suggest_categorical(
             "use_target_kl", [0.008, 0.01, 0.02, 0.022]
