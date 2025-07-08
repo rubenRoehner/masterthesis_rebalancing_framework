@@ -42,8 +42,8 @@ from stable_baselines3.common.callbacks import EvalCallback
 import csv
 import os
 
-OPTIMIZE_PPO_CORE = True
-OPTIMIZE_ARCHITECTURE = False
+OPTIMIZE_PPO_CORE = False
+OPTIMIZE_ARCHITECTURE = True
 OPTIMIZE_STABILITY = False
 OPTIMIZE_REWARD_WEIGHTS = False
 
@@ -94,12 +94,13 @@ REWARD_WEIGHT_GINI = 0.12
 UIC_POLICY = "MultiInputPolicy"
 
 # {'learning_rate': 1.9533753916143637e-05, 'n_steps': 512, 'batch_size': 32, 'clip_range': 0.19, 'ent_coef': 0.00034931655259393753, 'vf_coef': 0.5}
-UIC_LEARNING_RATE = 1.9533753916143637e-05
+# {'learning_rate': 2.403268653036228e-06, 'n_steps': 512, 'batch_size': 32, 'clip_range': 0.23, 'ent_coef': 1.8983075157031546e-05, 'vf_coef': 0.36000000000000004}
+UIC_LEARNING_RATE = 2.403268653036228e-06
 UIC_N_STEPS = 512
 UIC_BATCH_SIZE = 32
-UIC_CLIP_RANGE = 0.19
-UIC_ENT_COEF = 0.0035
-UIC_VF_COEF = 0.5
+UIC_CLIP_RANGE = 0.23
+UIC_ENT_COEF = 1.8983e-05
+UIC_VF_COEF = 0.36
 
 # {'gamma': 0.934, 'gae_lambda': 0.89, 'use_target_kl': None}
 UIC_GAMMA = 0.934
@@ -315,7 +316,7 @@ def objective(trial: optuna.Trial) -> float:
         batch_size = trial.suggest_categorical("batch_size", [32, 64])
         clip_range = trial.suggest_float("clip_range", 0.1, 0.24, step=0.01)
         ent_coef = trial.suggest_float("ent_coef", 1e-6, 5e-3, log=True)
-        vf_coef = trial.suggest_float("vf_coef", 0.28, 1.12, step=0.1)
+        vf_coef = trial.suggest_float("vf_coef", 0.28, 1.12, step=0.01)
     else:
         learning_rate = UIC_LEARNING_RATE
         n_steps = UIC_N_STEPS
