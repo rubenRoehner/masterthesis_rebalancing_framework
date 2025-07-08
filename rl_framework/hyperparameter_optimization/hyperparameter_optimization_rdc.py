@@ -35,11 +35,11 @@ from demand_forecasting.IrConv_LSTM_pre_forecaster import (
 from demand_provider.demand_provider_impl import DemandProviderImpl
 
 
-OPTIMIZE_LEARNING_RATE = False
+OPTIMIZE_LEARNING_RATE = True
 OPTIMIZE_REPLAY_BUFFER = False
 OPTIMIZE_ARCHITECTURE = False
 OPTIMIZE_EXPLORATION = False
-OPTIMIZE_REWARD_WEIGHTS = True
+OPTIMIZE_REWARD_WEIGHTS = False
 
 FLAG_LABELS = {
     "OPTIMIZE_REPLAY_BUFFER": "replaybuffer",
@@ -203,18 +203,18 @@ def objective(trial: optuna.Trial) -> float:
     # --- HYPERPARAMETERS ---
     if OPTIMIZE_REPLAY_BUFFER:
         RDC_REPLAY_BUFFER_CAPACITY = trial.suggest_int(
-            "rdc_replay_buffer_capacity", 5_000, 20_000, step=5000
+            "rdc_replay_buffer_capacity", 2_000, 23_000, step=1000
         )
         RDC_REPLAY_BUFFER_ALPHA = trial.suggest_float(
-            "rdc_replay_buffer_alpha", 0.30, 0.80, step=0.1
+            "rdc_replay_buffer_alpha", 0.2, 0.9, step=0.1
         )
         RDC_REPLAY_BUFFER_BETA_START = trial.suggest_float(
-            "rdc_replay_buffer_beta_start", 0.2, 0.6, step=0.1
+            "rdc_replay_buffer_beta_start", 0.1, 0.7, step=0.1
         )
         RDC_REPLAY_BUFFER_BETA_FRAMES = trial.suggest_int(
-            "rdc_replay_buffer_beta_frames", 50_000, 200_000, step=50_000
+            "rdc_replay_buffer_beta_frames", 20_000, 230_000, step=10_000
         )
-        RDC_TAU = trial.suggest_float("rdc_tau", 0.001, 0.01, step=0.001)
+        RDC_TAU = trial.suggest_float("rdc_tau", 0.003, 0.01, step=0.001)
     else:
         # 16,5000,0.6,0.5,50000,0.005,97.52000816810578
         # rdc_replay_buffer_capacity: 15000
@@ -229,12 +229,8 @@ def objective(trial: optuna.Trial) -> float:
         RDC_TAU = 0.007
 
     if OPTIMIZE_ARCHITECTURE:
-        RDC_BATCH_SIZE = trial.suggest_categorical(
-            "rdc_batch_size", [64, 128, 256, 512]
-        )
-        RDC_HIDDEN_DIM = trial.suggest_categorical(
-            "rdc_hidden_dim", [64, 128, 256, 512]
-        )
+        RDC_BATCH_SIZE = trial.suggest_categorical("rdc_batch_size", [128, 256, 512])
+        RDC_HIDDEN_DIM = trial.suggest_categorical("rdc_hidden_dim", [128, 256, 512])
     else:
         # 2,256,256,96.65786108532586
         # rdc_batch_size: 256
@@ -243,10 +239,10 @@ def objective(trial: optuna.Trial) -> float:
         RDC_HIDDEN_DIM = 512
 
     if OPTIMIZE_LEARNING_RATE:
-        RDC_LR = trial.suggest_float("rdc_lr", 1e-6, 1e-3, log=True)
-        RDC_LR_STEP_SIZE = trial.suggest_int("rdc_lr_step_size", 500, 3000, step=500)
-        RDC_LR_GAMMA = trial.suggest_float("rdc_lr_gamma", 0.9, 0.99, step=0.01)
-        RDC_GAMMA = trial.suggest_float("rdc_gamma", 0.9, 0.99, step=0.01)
+        RDC_LR = trial.suggest_float("rdc_lr", 1e-6, 5e-5, log=True)
+        RDC_LR_STEP_SIZE = trial.suggest_int("rdc_lr_step_size", 1800, 3200, step=200)
+        RDC_LR_GAMMA = trial.suggest_float("rdc_lr_gamma", 0.91, 0.98, step=0.01)
+        RDC_GAMMA = trial.suggest_float("rdc_gamma", 0.93, 0.99, step=0.01)
     else:
         # LR: 2.3655256071124346e-06
         # LR_STEP_SIZE: 3000
@@ -259,9 +255,9 @@ def objective(trial: optuna.Trial) -> float:
 
     RDC_EPSILON_START = 1.0
     if OPTIMIZE_EXPLORATION:
-        RDC_EPSILON_END = trial.suggest_float("rdc_epsilon_end", 0.02, 0.2, step=0.01)
+        RDC_EPSILON_END = trial.suggest_float("rdc_epsilon_end", 0.05, 0.2, step=0.01)
         RDC_EPSILON_DECAY = trial.suggest_float(
-            "rdc_epsilon_decay", 0.990, 0.999, step=0.001
+            "rdc_epsilon_decay", 0.988, 0.999, step=0.001
         )
     else:
         # 27,0.04,0.9983,97.58201458861882
@@ -272,19 +268,19 @@ def objective(trial: optuna.Trial) -> float:
 
     if OPTIMIZE_REWARD_WEIGHTS:
         RDC_REWARD_WEIGHT_DEMAND = trial.suggest_float(
-            "rdc_reward_weight_demand", 0.2, 2.0, step=0.1
+            "rdc_reward_weight_demand", 0.2, 1.7, step=0.1
         )
         RDC_REWARD_WEIGHT_REBALANCING = trial.suggest_float(
-            "rdc_reward_weight_rebalancing", 0.2, 2.0, step=0.1
+            "rdc_reward_weight_rebalancing", 0.4, 2.2, step=0.1
         )
         RDC_REWARD_WEIGHT_GINI = trial.suggest_float(
-            "rdc_reward_weight_gini", 0.0, 0.50, step=0.05
+            "rdc_reward_weight_gini", 0.0, 0.20, step=0.05
         )
     else:
         # 26,1.4,1.05,0.07,98.27922198476875
-        RDC_REWARD_WEIGHT_DEMAND = 1.4
-        RDC_REWARD_WEIGHT_REBALANCING = 1.05
-        RDC_REWARD_WEIGHT_GINI = 0.07
+        RDC_REWARD_WEIGHT_DEMAND = 0.3
+        RDC_REWARD_WEIGHT_REBALANCING = 0.9
+        RDC_REWARD_WEIGHT_GINI = 0.0
 
     RDC_STEP_DURATION = 60  # in minutes
 
