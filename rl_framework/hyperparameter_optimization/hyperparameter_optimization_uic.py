@@ -43,8 +43,8 @@ import csv
 import os
 
 OPTIMIZE_PPO_CORE = False
-OPTIMIZE_ARCHITECTURE = True
-OPTIMIZE_STABILITY = False
+OPTIMIZE_ARCHITECTURE = False
+OPTIMIZE_STABILITY = True
 OPTIMIZE_REWARD_WEIGHTS = False
 
 FLAG_LABELS = {
@@ -108,10 +108,11 @@ UIC_GAE_LAMBDA = 0.89
 UIC_TARGET_KL = None
 
 # {'n_layers': 3, 'hidden_size': 128, 'activation': 'ReLU'}
+# {'n_layers': 2, 'hidden_size': 64, 'activation': 'Tanh'}
 UIC_POLICY_KWARGS = {
     "net_arch": dict(
-        pi=[128, 128, 128],
-        vf=[128, 128, 128],
+        pi=[64, 64],
+        vf=[64, 64],
     ),
     "activation_fn": torch.nn.ReLU,
 }
