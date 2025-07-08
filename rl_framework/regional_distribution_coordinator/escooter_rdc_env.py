@@ -275,11 +275,42 @@ class EscooterRDCEnv(gym.Env):
         Raises:
             None
         """
-        total_vehicles_rebalanced = 0
         temp_vehicle_counts = current_vehicle_counts.copy()
-        for community_id, community_index in community_index_map.items():
-            allocation = actions[community_index]
 
+        add_requests = {i: val for i, val in enumerate(actions) if val > 0}
+        remove_requests = {i: val for i, val in enumerate(actions) if val < 0}
+
+        total_add_requested = sum(add_requests.values())
+        total_remove_requested = -sum(remove_requests.values())
+
+        if total_add_requested == 0 or total_remove_requested == 0:
+            return 0, temp_vehicle_counts
+
+        if total_add_requested > total_remove_requested:
+            scale_factor = total_remove_requested / total_add_requested
+            for i in add_requests:
+                add_requests[i] = int(add_requests[i] * scale_factor)
+        elif total_remove_requested > total_add_requested:
+            scale_factor = total_add_requested / total_remove_requested
+            for i in remove_requests:
+                remove_requests[i] = int(remove_requests[i] * scale_factor)
+
+        total_to_add = sum(add_requests.values())
+        total_to_remove = -sum(remove_requests.values())
+        vehicles_to_move = min(total_to_add, total_to_remove)
+
+        if vehicles_to_move == 0:
+            return 0, temp_vehicle_counts
+
+        vehicle_pool = 0
+        vehicles_removed_count = 0
+
+        for community_index, allocation in remove_requests.items():
+            community_id = [
+                cid
+                for cid, cidx in community_index_map.items()
+                if cidx == community_index
+            ][0]
             zones_in_community = (
                 zone_community_map[
                     zone_community_map["community_index"] == community_id
@@ -288,24 +319,52 @@ class EscooterRDCEnv(gym.Env):
                 .tolist()
             )
 
-            if allocation > 0:
-                vehicles_to_be_added = allocation
-                for _ in range(vehicles_to_be_added):
-                    emptiest_zones = min(
-                        zones_in_community, key=lambda z: temp_vehicle_counts[z]
-                    )
-                    temp_vehicle_counts[emptiest_zones] += 1
-                    total_vehicles_rebalanced += 1
+            vehicles_to_remove_from_comm = min(
+                -allocation, vehicles_to_move - vehicles_removed_count
+            )
 
-            elif allocation < 0:
-                vehicles_to_be_removed = -allocation
-                for _ in range(vehicles_to_be_removed):
-                    fullest_zones = max(
+            for _ in range(vehicles_to_remove_from_comm):
+                fullest_zones = sorted(
+                    zones_in_community,
+                    key=lambda z: temp_vehicle_counts[z],
+                    reverse=True,
+                )
+                for zone_idx in fullest_zones:
+                    if temp_vehicle_counts[zone_idx] > 0:
+                        temp_vehicle_counts[zone_idx] -= 1
+                        vehicle_pool += 1
+                        vehicles_removed_count += 1
+                        break
+
+        total_vehicles_rebalanced = vehicle_pool
+
+        vehicles_added_count = 0
+        for community_index, allocation in add_requests.items():
+            community_id = [
+                cid
+                for cid, cidx in community_index_map.items()
+                if cidx == community_index
+            ][0]
+            zones_in_community = (
+                zone_community_map[
+                    zone_community_map["community_index"] == community_id
+                ]["grid_index"]
+                .map(zone_index_map)
+                .tolist()
+            )
+
+            vehicles_to_add_to_comm = min(
+                allocation, vehicle_pool - vehicles_added_count
+            )
+
+            for _ in range(vehicles_to_add_to_comm):
+                if vehicle_pool > 0:
+                    emptiest_zone = min(
                         zones_in_community, key=lambda z: temp_vehicle_counts[z]
                     )
-                    if temp_vehicle_counts[fullest_zones] > 0:
-                        temp_vehicle_counts[fullest_zones] -= 1
-                        total_vehicles_rebalanced += 1
+                    temp_vehicle_counts[emptiest_zone] += 1
+                    vehicle_pool -= 1
+                    vehicles_added_count += 1
 
         return total_vehicles_rebalanced, temp_vehicle_counts
 
