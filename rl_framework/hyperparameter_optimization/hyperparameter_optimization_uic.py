@@ -69,7 +69,7 @@ timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 study_filename = f"uic_ho_{study_label}_{timestamp}"
 output_dir = "ho_results"
 os.makedirs(output_dir, exist_ok=True)
-N_TRIALS = 30
+N_TRIALS = 100
 
 # global parameters
 COMMUNITY_ID = "861faa7afffffff"
@@ -313,12 +313,12 @@ def objective(trial: optuna.Trial) -> float:
         None
     """
     if OPTIMIZE_PPO_CORE:
-        learning_rate = trial.suggest_float("learning_rate", 1e-6, 3e-5, log=True)
+        learning_rate = trial.suggest_float("learning_rate", 7e-7, 5e-6, log=True)
         n_steps = trial.suggest_categorical("n_steps", [512, 1024])
         batch_size = trial.suggest_categorical("batch_size", [32, 64])
-        clip_range = trial.suggest_float("clip_range", 0.1, 0.24, step=0.01)
-        ent_coef = trial.suggest_float("ent_coef", 1e-6, 5e-3, log=True)
-        vf_coef = trial.suggest_float("vf_coef", 0.28, 1.12, step=0.01)
+        clip_range = trial.suggest_float("clip_range", 0.087, 0.243, step=0.001)
+        ent_coef = trial.suggest_float("ent_coef", 1e-5, 2.75e-3, log=True)
+        vf_coef = trial.suggest_float("vf_coef", 0.339, 0.591, step=0.01)
     else:
         learning_rate = UIC_LEARNING_RATE
         n_steps = UIC_N_STEPS
@@ -329,7 +329,7 @@ def objective(trial: optuna.Trial) -> float:
 
     if OPTIMIZE_ARCHITECTURE:
         n_layers = trial.suggest_int("n_layers", 2, 3)
-        hidden_size = trial.suggest_categorical("hidden_size", [64, 128, 256])
+        hidden_size = trial.suggest_categorical("hidden_size", [64, 128])
         activation_name = trial.suggest_categorical("activation", ["ReLU", "Tanh"])
         if activation_name == "ReLU":
             activation_fn = torch.nn.ReLU
@@ -349,12 +349,10 @@ def objective(trial: optuna.Trial) -> float:
         policy_kwargs = UIC_POLICY_KWARGS
 
     if OPTIMIZE_STABILITY:
-        gamma = trial.suggest_float("gamma", 0.913, 0.954, step=0.001)
-        gae_lambda = trial.suggest_float("gae_lambda", 0.878, 0.962, step=0.001)
+        gamma = trial.suggest_float("gamma", 0.918, 0.957, step=0.001)
+        gae_lambda = trial.suggest_float("gae_lambda", 0.892, 0.960, step=0.001)
 
-        raw_target_kl = trial.suggest_categorical(
-            "use_target_kl", [0.008, 0.01, 0.02, 0.022]
-        )
+        raw_target_kl = trial.suggest_categorical("use_target_kl", [0.01, 0.02, 0.022])
         if raw_target_kl is None:
             target_kl: float | None = None
         else:
@@ -366,13 +364,13 @@ def objective(trial: optuna.Trial) -> float:
 
     if OPTIMIZE_REWARD_WEIGHTS:
         reward_weight_demand = trial.suggest_float(
-            "reward_weight_demand", 0.1, 1.0, step=0.1
+            "reward_weight_demand", 0.5, 1.0, step=0.1
         )
         reward_weight_rebalancing = trial.suggest_float(
-            "reward_weight_rebalancing", 0.8, 2.0, step=0.1
+            "reward_weight_rebalancing", 0.8, 1.5, step=0.1
         )
         reward_weight_gini = trial.suggest_float(
-            "reward_weight_gini", 0.0, 0.4, step=0.01
+            "reward_weight_gini", 0.0, 0.2, step=0.01
         )
     else:
         reward_weight_demand = REWARD_WEIGHT_DEMAND
