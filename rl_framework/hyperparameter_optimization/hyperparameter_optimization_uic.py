@@ -42,9 +42,9 @@ from stable_baselines3.common.callbacks import EvalCallback
 import csv
 import os
 
-OPTIMIZE_PPO_CORE = False
-OPTIMIZE_ARCHITECTURE = False
-OPTIMIZE_STABILITY = False
+OPTIMIZE_PPO_CORE = True
+OPTIMIZE_ARCHITECTURE = True
+OPTIMIZE_STABILITY = True
 OPTIMIZE_REWARD_WEIGHTS = True
 
 FLAG_LABELS = {
