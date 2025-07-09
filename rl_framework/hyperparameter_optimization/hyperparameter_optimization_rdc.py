@@ -37,8 +37,8 @@ from demand_provider.demand_provider_impl import DemandProviderImpl
 
 OPTIMIZE_LEARNING_RATE = False
 OPTIMIZE_REPLAY_BUFFER = False
-OPTIMIZE_ARCHITECTURE = True
-OPTIMIZE_EXPLORATION = False
+OPTIMIZE_ARCHITECTURE = False
+OPTIMIZE_EXPLORATION = True
 OPTIMIZE_REWARD_WEIGHTS = False
 
 FLAG_LABELS = {
@@ -232,10 +232,10 @@ def objective(trial: optuna.Trial) -> float:
         RDC_HIDDEN_DIM = trial.suggest_categorical("rdc_hidden_dim", [128, 256, 512])
     else:
         # 2,256,256,96.65786108532586
-        # rdc_batch_size: 256
-        # rdc_hidden_dim: 512
-        RDC_BATCH_SIZE = 256
-        RDC_HIDDEN_DIM = 512
+        # rdc_batch_size: 512
+        # rdc_hidden_dim: 128
+        RDC_BATCH_SIZE = 512
+        RDC_HIDDEN_DIM = 128
 
     if OPTIMIZE_LEARNING_RATE:
         RDC_LR = trial.suggest_float("rdc_lr", 1e-6, 5e-5, log=True)

@@ -318,7 +318,7 @@ def objective(trial: optuna.Trial) -> float:
         batch_size = trial.suggest_categorical("batch_size", [32, 64])
         clip_range = trial.suggest_float("clip_range", 0.087, 0.243, step=0.001)
         ent_coef = trial.suggest_float("ent_coef", 1e-5, 2.75e-3, log=True)
-        vf_coef = trial.suggest_float("vf_coef", 0.339, 0.591, step=0.01)
+        vf_coef = trial.suggest_float("vf_coef", 0.339, 0.591, step=0.001)
     else:
         learning_rate = UIC_LEARNING_RATE
         n_steps = UIC_N_STEPS
