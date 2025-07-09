@@ -229,7 +229,8 @@ class EscooterRDCEnv(gym.Env):
         reward = (wd * satisfied_demand_ratio + wr * reb_r + wg * gini_r) / total_w
         return float(np.clip(reward, 0.0, 1.0))
 
-    def calculate_gini_coefficient(self) -> float:
+    @staticmethod
+    def calculate_gini_coefficient(vehicle_counts) -> float:
         """Calculate the Gini coefficient of vehicle distribution across zones.
 
         Args:
@@ -241,7 +242,7 @@ class EscooterRDCEnv(gym.Env):
         Raises:
             None
         """
-        array = np.array(self.current_vehicle_counts, dtype=float)
+        array = np.array(vehicle_counts, dtype=float)
         size = array.size
         mean = array.mean()
 
@@ -452,7 +453,7 @@ class EscooterRDCEnv(gym.Env):
         reward = self.calculate_reward(
             satisfied_demand_ratio=satisfied_demand_ratio,
             total_vehicles_rebalanced=total_vehicles_rebalanced,
-            gini_coefficient=self.calculate_gini_coefficient(),
+            gini_coefficient=EscooterRDCEnv.calculate_gini_coefficient(self.current_vehicle_counts.copy()),
         )
 
         self.current_step += 1

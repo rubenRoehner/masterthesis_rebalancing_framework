@@ -1,9 +1,9 @@
 """
-evaluate_framework.py
+evaluate_greedy_baselines.py
 
-Main evaluation script for the Hierarchical Reinforcement Learning framework.
-This script loads trained RDC and UIC agents and evaluates their coordinated performance
-in managing e-scooter fleet distribution across multiple communities.
+Main evaluation script for greedy heuristic baselines.
+This script evaluates simple greedy strategies for both manual rebalancing
+and user incentive coordination to serve as baselines for the HRL framework.
 """
 
 import sys
@@ -15,113 +15,96 @@ sys.path.append(
 )
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from demand_forecasting.IrConv_LSTM_pre_forecaster import (
-    IrConvLstmDemandPreForecaster,
-)
-from regional_distribution_coordinator.regional_distribution_coordinator import (
-    RegionalDistributionCoordinator,
-)
-from training_loop import RDC_ACTION_VALUES, RDC_HIDDEN_DIM, RDC_FEATURES_PER_COMMUNITY
+from demand_forecasting.IrConv_LSTM_pre_forecaster import IrConvLstmDemandPreForecaster
 from demand_provider.demand_provider_impl import DemandProviderImpl
-from hrl_framework_evaluator import HRLFrameworkEvaluator
-from stable_baselines3 import PPO
-import torch
+from greedy_heuristics import (
+    GreedyManualRebalancer,
+    GreedyIncentiveCoordinator,
+    GreedyHeuristicEvaluator,
+)
 import pandas as pd
 from datetime import timedelta, datetime
-from collections import OrderedDict
 from uic_training_loop import USER_WILLINGNESS_FN
+from training_loop import RDC_ACTION_VALUES
 
-# Mean in GBFS data is around 900 scooters
-# [750, 900, 1200]
+# Configuration
 START_TIME = datetime(2025, 5, 18, 15, 0)
 END_TIME = datetime(2025, 6, 18, 15, 0)
 STEP_DURATION = 60
 MAX_STEPS = 400
-# RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250630-184804.pth"
-RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250703-173727.pth"
-UIC_AGENT_PATHS = [
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa44fffffff_UIC_20250703-184956.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa637ffffff_UIC_20250703-194404.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa707ffffff_UIC_20250703-203635.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa717ffffff_UIC_20250703-213213.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa71fffffff_UIC_20250703-222805.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa787ffffff_UIC_20250703-232329.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa78fffffff_UIC_20250704-001718.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa7a7ffffff_UIC_20250704-011026.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa7afffffff_UIC_20250704-020616.zip",
-]
 
+# Test different combinations
 CONFIGURATIONS = [
     {
         "manual": True,
         "incentive": True,
-        "name": "HRL_Both_Enabled_900",
+        "name": "Both_Enabled_900",
         "fleet_size": 900,
     },
     {
         "manual": True,
         "incentive": False,
-        "name": "HRL_Manual_Only_900",
+        "name": "Manual_Only_900",
         "fleet_size": 900,
     },
     {
         "manual": False,
         "incentive": True,
-        "name": "HRL_Incentive_Only_900",
+        "name": "Incentive_Only_900",
         "fleet_size": 900,
     },
     {
         "manual": False,
         "incentive": False,
-        "name": "HRL_No_Rebalancing_900",
+        "name": "No_Rebalancing_900",
         "fleet_size": 900,
     },
     {
         "manual": True,
         "incentive": True,
-        "name": "HRL_Both_Enabled_600",
+        "name": "Both_Enabled_600",
         "fleet_size": 600,
     },
     {
         "manual": True,
         "incentive": False,
-        "name": "HRL_Manual_Only_600",
+        "name": "Manual_Only_600",
         "fleet_size": 600,
     },
     {
         "manual": False,
         "incentive": True,
-        "name": "HRL_Incentive_Only_600",
+        "name": "Incentive_Only_600",
         "fleet_size": 600,
     },
     {
         "manual": False,
         "incentive": False,
-        "name": "HRL_No_Rebalancing_600",
+        "name": "No_Rebalancing_600",
         "fleet_size": 600,
     },
     {
         "manual": True,
         "incentive": True,
-        "name": "HRL_Both_Enabled_1200",
+        "name": "Both_Enabled_1200",
         "fleet_size": 1200,
     },
     {
         "manual": True,
         "incentive": False,
-        "name": "HRL_Manual_Only_1200",
+        "name": "Manual_Only_1200",
         "fleet_size": 1200,
     },
     {
         "manual": False,
         "incentive": True,
-        "name": "HRL_Incentive_Only_1200",
+        "name": "Incentive_Only_1200",
         "fleet_size": 1200,
     },
     {
         "manual": False,
         "incentive": False,
-        "name": "HRL_No_Rebalancing_1200",
+        "name": "No_Rebalancing_1200",
         "fleet_size": 1200,
     },
 ]
@@ -131,7 +114,6 @@ ZONE_COMMUNITY_MAP: pd.DataFrame = pd.read_pickle(
 )
 NUM_COMMUNITIES = ZONE_COMMUNITY_MAP["community_index"].nunique()
 N_TOTAL_ZONES = ZONE_COMMUNITY_MAP.shape[0]
-
 
 ZONE_INDEX_MAP: dict[str, int] = {}
 for i, row in ZONE_COMMUNITY_MAP.iterrows():
@@ -156,16 +138,11 @@ DROP_OFF_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_fr
 PICK_UP_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_pickup_forecasts.pkl"
 
 
-torch.cuda.set_device(2)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def run_greedy_evaluation() -> None:
+    """Run evaluation of greedy heuristic baselines.
 
-
-def run_evaluation() -> None:
-    """Run complete evaluation of the HRL framework.
-
-    Loads trained RDC and UIC agents, sets up the evaluation environment,
-    and measures the coordinated performance of both agent types working together
-    to manage e-scooter fleet distribution and user incentives.
+    Tests different combinations of manual and incentive-based rebalancing
+    using simple greedy strategies to establish baseline performance.
 
     Args:
         None
@@ -176,9 +153,6 @@ def run_evaluation() -> None:
     Raises:
         None
     """
-    rdc_agent_network: OrderedDict = torch.load(RDC_AGENT_PATH, map_location=device)
-    uic_agents = [PPO.load(path, device=device) for path in UIC_AGENT_PATHS]
-
     dropoff_demand_forecaster = IrConvLstmDemandPreForecaster(
         num_communities=NUM_COMMUNITIES,
         num_zones=N_TOTAL_ZONES,
@@ -211,17 +185,23 @@ def run_evaluation() -> None:
         endTime=END_TIME,
     )
 
-    rdc_agent = RegionalDistributionCoordinator(
-        device=device,
-        hidden_dim=RDC_HIDDEN_DIM,
+    manual_rebalancer = GreedyManualRebalancer(
         action_values=RDC_ACTION_VALUES,
         num_communities=NUM_COMMUNITIES,
-        state_dim=NUM_COMMUNITIES * RDC_FEATURES_PER_COMMUNITY,
+        pickup_demand_forecaster=pickup_demand_forecaster,
+        max_rebalancing_ratio=0.10,
     )
 
-    rdc_agent.set_evaluation_mode(rdc_agent_network)
+    incentive_coordinators = []
+    for _ in range(NUM_COMMUNITIES):
+        coordinator = GreedyIncentiveCoordinator(
+            pickup_demand_forecaster=pickup_demand_forecaster,
+            dropoff_demand_forecaster=dropoff_demand_forecaster,
+            incentive_threshold_ratio=0.75,
+        )
+        incentive_coordinators.append(coordinator)
 
-    results_summary = {}
+    results = {}
 
     for config in CONFIGURATIONS:
         print(f"\n{'='*60}")
@@ -231,56 +211,53 @@ def run_evaluation() -> None:
         print(f"Fleet Size: {config['fleet_size']}")
         print(f"{'='*60}")
 
-        evaluator = HRLFrameworkEvaluator(
-            fleet_size=config["fleet_size"],
-            rdc_agent=rdc_agent,
-            uic_agents=uic_agents,
+        evaluator = GreedyHeuristicEvaluator(
+            manual_rebalancer=manual_rebalancer,
+            incentive_coordinators=incentive_coordinators,
             zone_community_map=ZONE_COMMUNITY_MAP,
-            zone_neighbor_map=ZONE_NEIGHBOR_MAP,
             community_index_map=COMMUNITY_INDEX_MAP,
-            dropoff_demand_forecaster=dropoff_demand_forecaster,
+            zone_index_map=ZONE_INDEX_MAP,
             pickup_demand_forecaster=pickup_demand_forecaster,
-            dropoff_demand_provider=dropoff_demand_provider,
+            dropoff_demand_forecaster=dropoff_demand_forecaster,
             pickup_demand_provider=pickup_demand_provider,
+            dropoff_demand_provider=dropoff_demand_provider,
+            fleet_size=config["fleet_size"],
             start_time=START_TIME,
             max_steps=MAX_STEPS,
             step_duration=timedelta(minutes=STEP_DURATION),
             user_willingness_fn=USER_WILLINGNESS_FN,
-            zone_index_map=ZONE_INDEX_MAP,
-            device=device,
-            enable_rdc_rebalancing=config["manual"],
-            enable_uic_rebalancing=config["incentive"],
+            zone_neighbor_map=ZONE_NEIGHBOR_MAP,
+            enable_manual_rebalancing=config["manual"],
+            enable_incentive_rebalancing=config["incentive"],
         )
 
-        results = evaluator.evaluate()
-        results["fleet_size"] = config["fleet_size"]
-        results_summary[config["name"]] = results
+        config_results = evaluator.evaluate()
+        results[config["name"]] = config_results
 
         print(f"\nResults for {config['name']}:")
-        for key, value in results.items():
-            print(f"  {key}: {value}")
+        for key, value in config_results.items():
+            print(f"  {key}: {value:.4f}")
 
     # Print summary comparison
     print(f"\n{'='*80}")
-    print("HRL FRAMEWORK - SUMMARY COMPARISON")
+    print("SUMMARY COMPARISON")
     print(f"{'='*80}")
     print(
-        f"{'Configuration':<25} {'Mean Satisfied':<15} {'Manual Rebal':<15} {'Incentive Rebal':<18} {'Mean Gini Index':<15} {'Fleet Size':<10}"
+        f"{'Configuration':<20} {'Mean Satisfied':<15} {'Manual Rebal':<15} {'Incentive Rebal':<18} {'Fleet Size':<10}"
     )
     print(f"{'-'*80}")
 
-    for config_name, config_results in results_summary.items():
+    for config_name, config_results in results.items():
         print(
-            f"{config_name:<25} "
+            f"{config_name:<20} "
             f"{config_results['mean_satisfied_ratio']:<15.4f} "
             f"{config_results['mean_rebalanced_vehicles_manually']:<15.1f} "
             f"{config_results['mean_rebalanced_vehicles_incentives']:<18.1f}"
-            f"{config_results['mean_gini_index']:<15.4f} "
             f"{config_results['fleet_size']:<10d}"
         )
 
-    print("\nHRL framework evaluation completed!")
+    print("\nGreedy baseline evaluation completed!")
 
 
 if __name__ == "__main__":
-    run_evaluation()
+    run_greedy_evaluation()

@@ -270,6 +270,7 @@ class HRLFrameworkEvaluator:
         satisfied_ratio = []
         total_rebalanced_vehicles_manually = []
         total_rebalanced_vehicles_incentives = []
+        gini_index = []
 
         with tqdm(
             total=self.max_steps, desc="Evaluating HRL Framework", unit="step"
@@ -397,6 +398,12 @@ class HRLFrameworkEvaluator:
                 self.current_step += 1
                 self.current_time += self.step_duration
 
+                gini_index.append(
+                    EscooterRDCEnv.calculate_gini_coefficient(
+                        self.global_vehicle_counts.copy()
+                    )
+                )
+
                 # Update progress bar with current metrics
                 pbar.set_postfix(
                     {
@@ -417,4 +424,5 @@ class HRLFrameworkEvaluator:
             ),
             "max_satisfied_ratio": np.max(satisfied_ratio),
             "min_satisfied_ratio": np.min(satisfied_ratio),
+            "mean_gini_index": np.mean(gini_index),
         }
