@@ -44,8 +44,8 @@ import os
 
 OPTIMIZE_PPO_CORE = False
 OPTIMIZE_ARCHITECTURE = False
-OPTIMIZE_STABILITY = True
-OPTIMIZE_REWARD_WEIGHTS = False
+OPTIMIZE_STABILITY = False
+OPTIMIZE_REWARD_WEIGHTS = True
 
 FLAG_LABELS = {
     "OPTIMIZE_PPO_CORE": "ppo-core",
@@ -103,9 +103,10 @@ UIC_ENT_COEF = 1.8983e-05
 UIC_VF_COEF = 0.36
 
 # {'gamma': 0.934, 'gae_lambda': 0.89, 'use_target_kl': None}
-UIC_GAMMA = 0.934
-UIC_GAE_LAMBDA = 0.89
-UIC_TARGET_KL = None
+# {'gamma': 0.932, 'gae_lambda': 0.954, 'use_target_kl': 0.022}
+UIC_GAMMA = 0.932
+UIC_GAE_LAMBDA = 0.954
+UIC_TARGET_KL = 0.022
 
 # {'n_layers': 3, 'hidden_size': 128, 'activation': 'ReLU'}
 # {'n_layers': 2, 'hidden_size': 64, 'activation': 'Tanh'}
