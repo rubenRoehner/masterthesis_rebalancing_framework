@@ -38,8 +38,8 @@ from demand_provider.demand_provider_impl import DemandProviderImpl
 OPTIMIZE_LEARNING_RATE = False
 OPTIMIZE_REPLAY_BUFFER = False
 OPTIMIZE_ARCHITECTURE = False
-OPTIMIZE_EXPLORATION = True
-OPTIMIZE_REWARD_WEIGHTS = False
+OPTIMIZE_EXPLORATION = False
+OPTIMIZE_REWARD_WEIGHTS = True
 
 FLAG_LABELS = {
     "OPTIMIZE_REPLAY_BUFFER": "replaybuffer",
@@ -260,10 +260,10 @@ def objective(trial: optuna.Trial) -> float:
         )
     else:
         # 27,0.04,0.9983,97.58201458861882
-        # rdc_epsilon_end: 0.05
-        # rdc_epsilon_decay: 0.999
-        RDC_EPSILON_END = 0.05
-        RDC_EPSILON_DECAY = 0.999
+        # rdc_epsilon_end: 0.06
+        # rdc_epsilon_decay: 0.996
+        RDC_EPSILON_END = 0.06
+        RDC_EPSILON_DECAY = 0.996
 
     if OPTIMIZE_REWARD_WEIGHTS:
         RDC_REWARD_WEIGHT_DEMAND = trial.suggest_float(
