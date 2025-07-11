@@ -43,7 +43,7 @@ COMMUNITY_IDS = [
 FLEET_SIZE = 90
 N_EPOCHS = 20
 MAX_STEPS_PER_EPISODE = 256
-TOTAL_TIME_STEPS = 200_000
+TOTAL_TIME_STEPS = 2_000_000
 START_TIME = datetime(2025, 2, 11, 14, 0)
 END_TIME = datetime(2025, 5, 18, 15, 0)
 
@@ -54,25 +54,26 @@ BASE_SEED = 42
 # UIC parameters
 UIC_STEP_DURATION = 60  # in minutes
 
-REWARD_WEIGHT_DEMAND = 1.0
-REWARD_WEIGHT_REBALANCING = 0.5
-REWARD_WEIGHT_GINI = 0.25
+REWARD_WEIGHT_DEMAND = 0.5
+REWARD_WEIGHT_REBALANCING = 1.5
+REWARD_WEIGHT_GINI = 0.0
 
+# Best hyperparameters: {'learning_rate': 2.056573223956345e-06, 'n_steps': 1024, 'batch_size': 32, 'clip_range': 0.2, 'ent_coef': 0.00011215783666166426, 'vf_coef': 0.41300000000000003, 'n_layers': 3, 'hidden_size': 128, 'activation': 'ReLU', 'gamma': 0.936, 'gae_lambda': 0.902, 'use_target_kl': 0.022, 'reward_weight_demand': 0.5, 'reward_weight_rebalancing': 1.5, 'reward_weight_gini': 0.0}
 UIC_POLICY = "MultiInputPolicy"
-UIC_N_STEPS = 512
-UIC_LEARNING_RATE = 1.092e-06
-UIC_GAMMA = 0.918
-UIC_GAE_LAMBDA = 0.95
-UIC_CLIP_RANGE = 0.13
-UIC_ENT_COEF = 0.00078
+UIC_N_STEPS = 1024
+UIC_LEARNING_RATE = 2.056573223956345e-06
+UIC_GAMMA = 0.936
+UIC_GAE_LAMBDA = 0.902
+UIC_CLIP_RANGE = 0.2
+UIC_ENT_COEF = 0.00011215783666166426
 UIC_BATCH_SIZE = 32
 UIC_VERBOSE = 1
 UIC_POLICY_KWARGS = {
-    "net_arch": dict(pi=[256, 256, 256], vf=[256, 256, 256]),
-    "activation_fn": torch.nn.Tanh,
+    "net_arch": dict(pi=[128, 128, 128], vf=[128, 128, 128]),
+    "activation_fn": torch.nn.ReLU,
 }
-UIC_VF_COEF = 0.6
-UIC_TARGET_KL = 0.02
+UIC_VF_COEF = 0.413
+UIC_TARGET_KL = 0.022
 UIC_TENSORBOARD_LOG = "rl_framework/runs/UIC/"
 
 
