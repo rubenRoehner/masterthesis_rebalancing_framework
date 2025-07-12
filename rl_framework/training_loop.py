@@ -21,11 +21,11 @@ from demand_forecasting.IrConv_LSTM_pre_forecaster import (
 )
 from demand_provider.demand_provider_impl import DemandProviderImpl
 
-torch.cuda.set_device(2)
+torch.cuda.set_device(3)
 # global parameters
 # Mean in GBFS data is around 900 scooters
 FLEET_SIZE = 810
-NUM_EPISODES = 1000
+NUM_EPISODES = 10_000
 MAX_STEPS_PER_EPISODE = 100
 START_TIME = datetime(2025, 2, 11, 14, 0)
 END_TIME = datetime(2025, 5, 18, 15, 0)
@@ -52,30 +52,30 @@ RDC_FEATURES_PER_COMMUNITY = (
     3  # forecast for pickup, forecast for dropoff, and current vehicle counts
 )
 
-RDC_REPLAY_BUFFER_CAPACITY = 10_000
-RDC_REPLAY_BUFFER_ALPHA = 0.8
-RDC_REPLAY_BUFFER_BETA_START = 0.3
-RDC_REPLAY_BUFFER_BETA_FRAMES = 150_000
+RDC_REPLAY_BUFFER_CAPACITY = 3_000
+RDC_REPLAY_BUFFER_ALPHA = 0.79
+RDC_REPLAY_BUFFER_BETA_START = 0.41
+RDC_REPLAY_BUFFER_BETA_FRAMES = 30_000
 
-RDC_BATCH_SIZE = 256
+RDC_BATCH_SIZE = 128
 RDC_HIDDEN_DIM = 256
 
-RDC_LR = 2.67e-6
-RDC_LR_STEP_SIZE = 1500
-RDC_LR_GAMMA = 0.9
-RDC_GAMMA = 0.926
+RDC_LR = 5.090778726259527e-07
+RDC_LR_STEP_SIZE = 2100
+RDC_LR_GAMMA = 0.942
+RDC_GAMMA = 0.979
 
 RDC_EPSILON_START = 1.0
-RDC_EPSILON_END = 0.06
-RDC_EPSILON_DECAY = 0.999
+RDC_EPSILON_END = 0.051
+RDC_EPSILON_DECAY = 0.998
 
-RDC_TAU = 0.001
+RDC_TAU = 0.0095
 
 RDC_STEP_DURATION = 60  # in minutes
 
-RDC_REWARD_WEIGHT_DEMAND = 1.1
-RDC_REWARD_WEIGHT_REBALANCING = 1.1
-RDC_REWARD_WEIGHT_GINI = 0.1
+RDC_REWARD_WEIGHT_DEMAND = 0.1
+RDC_REWARD_WEIGHT_REBALANCING = 1.9
+RDC_REWARD_WEIGHT_GINI = 0.0
 
 DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
 PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
