@@ -9,6 +9,8 @@ and user incentive coordination to serve as baselines for the HRL framework.
 import sys
 import os
 
+import torch
+
 # Add the parent directories to Python path
 sys.path.append(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -32,6 +34,8 @@ START_TIME = datetime(2025, 5, 18, 15, 0)
 END_TIME = datetime(2025, 6, 18, 15, 0)
 STEP_DURATION = 60
 MAX_STEPS = 400
+
+torch.cuda.set_device(3)
 
 # Test different combinations
 CONFIGURATIONS = [

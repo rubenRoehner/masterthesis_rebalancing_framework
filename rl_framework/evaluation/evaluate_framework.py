@@ -37,18 +37,18 @@ START_TIME = datetime(2025, 5, 18, 15, 0)
 END_TIME = datetime(2025, 6, 18, 15, 0)
 STEP_DURATION = 60
 MAX_STEPS = 400
-# RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250630-184804.pth"
-RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250703-173727.pth"
+RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250713-220126.pth"
+# RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250703-173727.pth"
 UIC_AGENT_PATHS = [
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa44fffffff_UIC_20250703-184956.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa637ffffff_UIC_20250703-194404.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa707ffffff_UIC_20250703-203635.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa717ffffff_UIC_20250703-213213.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa71fffffff_UIC_20250703-222805.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa787ffffff_UIC_20250703-232329.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa78fffffff_UIC_20250704-001718.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa7a7ffffff_UIC_20250704-011026.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa7afffffff_UIC_20250704-020616.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/uic_best_model/861faa44fffffff/best_model.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/uic_best_model/861faa637ffffff/best_model.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/uic_best_model/861faa707ffffff/best_model.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/uic_best_model/861faa717ffffff/best_model.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/uic_best_model/861faa71fffffff/best_model.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/uic_best_model/861faa787ffffff/best_model.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/uic_best_model/861faa78fffffff/best_model.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/uic_best_model/861faa7a7ffffff/best_model.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/uic_best_model/861faa7afffffff/best_model.zip",
 ]
 
 CONFIGURATIONS = [
@@ -156,7 +156,7 @@ DROP_OFF_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_fr
 PICK_UP_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_pickup_forecasts.pkl"
 
 
-torch.cuda.set_device(2)
+torch.cuda.set_device(3)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 

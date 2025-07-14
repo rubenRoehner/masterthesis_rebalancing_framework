@@ -73,8 +73,8 @@ RDC_TAU = 0.0095
 
 RDC_STEP_DURATION = 60  # in minutes
 
-RDC_REWARD_WEIGHT_DEMAND = 0.1
-RDC_REWARD_WEIGHT_REBALANCING = 1.9
+RDC_REWARD_WEIGHT_DEMAND = 10.0
+RDC_REWARD_WEIGHT_REBALANCING = 1.0
 RDC_REWARD_WEIGHT_GINI = 0.0
 
 DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"

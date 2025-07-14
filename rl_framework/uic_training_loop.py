@@ -43,7 +43,7 @@ COMMUNITY_IDS = [
 FLEET_SIZE = 90
 N_EPOCHS = 20
 MAX_STEPS_PER_EPISODE = 256
-TOTAL_TIME_STEPS = 2_000_000
+TOTAL_TIME_STEPS = 1_000_000
 START_TIME = datetime(2025, 2, 11, 14, 0)
 END_TIME = datetime(2025, 5, 18, 15, 0)
 
@@ -54,8 +54,8 @@ BASE_SEED = 42
 # UIC parameters
 UIC_STEP_DURATION = 60  # in minutes
 
-REWARD_WEIGHT_DEMAND = 0.5
-REWARD_WEIGHT_REBALANCING = 1.5
+REWARD_WEIGHT_DEMAND = 10.0
+REWARD_WEIGHT_REBALANCING = 1.0
 REWARD_WEIGHT_GINI = 0.0
 
 # Best hyperparameters: {'learning_rate': 2.056573223956345e-06, 'n_steps': 1024, 'batch_size': 32, 'clip_range': 0.2, 'ent_coef': 0.00011215783666166426, 'vf_coef': 0.41300000000000003, 'n_layers': 3, 'hidden_size': 128, 'activation': 'ReLU', 'gamma': 0.936, 'gae_lambda': 0.902, 'use_target_kl': 0.022, 'reward_weight_demand': 0.5, 'reward_weight_rebalancing': 1.5, 'reward_weight_gini': 0.0}
