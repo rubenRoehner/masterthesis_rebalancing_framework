@@ -1,16 +1,16 @@
 """
 uic_training_loop.py
 
-Training loop for User Incentive Coordinator (UIC) agents.
-This script trains individual UIC agents for each community using PPO algorithm,
-with each agent learning to provide optimal incentives for e-scooter rebalancing within their community.
+Optimized training loop for User Incentive Coordinator (UIC) agents.
+- Trains agents in parallel on specified GPUs.
+- Loads all data only once to reduce I/O and memory overhead.
 """
 
 from datetime import datetime, timedelta
 import torch
 import pandas as pd
 import gymnasium as gym
-
+import multiprocessing as mp
 
 from demand_forecasting.IrConv_LSTM_pre_forecaster import (
     IrConvLstmDemandPreForecaster,
@@ -23,12 +23,10 @@ from user_incentive_coordinator.user_incentive_coordinator import (
     UserIncentiveCoordinator,
 )
 
-from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv, SubprocVecEnv
+from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.callbacks import EvalCallback
 
-# Best hyperparameters: {'learning_rate': 1.0920802054925035e-06, 'n_steps': 512, 'batch_size': 32, 'gamma': 0.918, 'clip_range': 0.13, 'ent_coef': 0.0007835438398052651, 'vf_coef': 0.6, 'use_target_kl': 0.02, 'n_layers': 3, 'hidden_size': 256, 'activation': 'Tanh'}
-# global parameters
+# --- SCRIPT CONFIGURATION ---
 COMMUNITY_IDS = [
     "861faa44fffffff",
     "861faa637ffffff",
@@ -43,23 +41,23 @@ COMMUNITY_IDS = [
 FLEET_SIZE = 90
 N_EPOCHS = 20
 MAX_STEPS_PER_EPISODE = 256
-TOTAL_TIME_STEPS = 1_000_000
+TOTAL_TIME_STEPS = 200_000
 START_TIME = datetime(2025, 2, 11, 14, 0)
 END_TIME = datetime(2025, 5, 18, 15, 0)
 
-torch.cuda.set_device(2)
-N_WORKERS = 8
+# --- Parallelization settings ---
+AVAILABLE_GPUS = [1, 2, 3]
+N_GPUS = len(AVAILABLE_GPUS)
 BASE_SEED = 42
 
-# UIC parameters
-UIC_STEP_DURATION = 60  # in minutes
-
-REWARD_WEIGHT_DEMAND = 10.0
+# --- UIC parameters ---
+UIC_POLICY = "MultiInputPolicy"
+UIC_STEP_DURATION = 60
+REWARD_WEIGHT_DEMAND = 1.0
 REWARD_WEIGHT_REBALANCING = 1.0
 REWARD_WEIGHT_GINI = 0.0
 
-# Best hyperparameters: {'learning_rate': 2.056573223956345e-06, 'n_steps': 1024, 'batch_size': 32, 'clip_range': 0.2, 'ent_coef': 0.00011215783666166426, 'vf_coef': 0.41300000000000003, 'n_layers': 3, 'hidden_size': 128, 'activation': 'ReLU', 'gamma': 0.936, 'gae_lambda': 0.902, 'use_target_kl': 0.022, 'reward_weight_demand': 0.5, 'reward_weight_rebalancing': 1.5, 'reward_weight_gini': 0.0}
-UIC_POLICY = "MultiInputPolicy"
+# Optimized hyperparameters
 UIC_N_STEPS = 1024
 UIC_LEARNING_RATE = 2.056573223956345e-06
 UIC_GAMMA = 0.936
@@ -67,7 +65,7 @@ UIC_GAE_LAMBDA = 0.902
 UIC_CLIP_RANGE = 0.2
 UIC_ENT_COEF = 0.00011215783666166426
 UIC_BATCH_SIZE = 32
-UIC_VERBOSE = 1
+UIC_VERBOSE = 0
 UIC_POLICY_KWARGS = {
     "net_arch": dict(pi=[128, 128, 128], vf=[128, 128, 128]),
     "activation_fn": torch.nn.ReLU,
@@ -75,6 +73,13 @@ UIC_POLICY_KWARGS = {
 UIC_VF_COEF = 0.413
 UIC_TARGET_KL = 0.022
 UIC_TENSORBOARD_LOG = "rl_framework/runs/UIC/"
+
+
+DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
+PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
+
+DROP_OFF_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_dropoff_forecasts.pkl"
+PICK_UP_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_pickup_forecasts.pkl"
 
 
 @staticmethod
@@ -155,151 +160,84 @@ def make_env(
     return _init
 
 
-def train_uic(community_id: str) -> None:
-    """Train a UIC agent for a specific community.
-
-    Args:
-        community_id: ID of the community to train the UIC agent for
-
-    Returns:
-        None
-
-    Raises:
-        None
+def train_uic(args):
     """
+    Train a UIC agent for a specific community on a specific GPU.
+    """
+    community_id, gpu_id, all_data = args
+    zone_community_map = all_data["zone_community_map"]
+    zone_neighbor_map_full = all_data["zone_neighbor_map"]
 
-    # [grid_index, community_id]
-    ZONE_COMMUNITY_MAP: pd.DataFrame = pd.read_pickle(
-        "/home/ruroit00/rebalancing_framework/processed_data/grid_community_map.pickle"
-    )
+    device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
+    torch.cuda.set_device(device)
+    print(f"Starting training for community {community_id} on device {device}")
 
-    NUM_COMMUNITIES = ZONE_COMMUNITY_MAP["community_index"].nunique()
-    N_TOTAL_ZONES = ZONE_COMMUNITY_MAP.shape[0]
-    print(f"Communities: {ZONE_COMMUNITY_MAP['community_index'].unique()}")
-    print(f"Total number of zones: {N_TOTAL_ZONES}")
-    print(f"Community ID: {community_id} ")
+    community_zones_df = zone_community_map[
+        zone_community_map["community_index"] == community_id
+    ]
+    n_zones = len(community_zones_df)
+    community_zone_ids = set(community_zones_df["grid_index"])
 
-    ZONE_INDEX_MAP: dict[str, int] = {}
-    for i, row in ZONE_COMMUNITY_MAP[
-        ZONE_COMMUNITY_MAP["community_index"] == community_id
-    ].iterrows():
-        ZONE_INDEX_MAP.update({row["grid_index"]: i})
+    zone_index_map = {row["grid_index"]: i for i, row in community_zones_df.iterrows()}
 
-    print(f"Number of zones in community {community_id}: {len(ZONE_INDEX_MAP)}")
-
-    COMMUNTIY_ZONE_IDS = set(ZONE_INDEX_MAP.keys())
-
-    ZONE_NEIGHBOR_MAP_DF: pd.DataFrame = pd.read_pickle(
-        "/home/ruroit00/rebalancing_framework/processed_data/grid_cells_neighbors_list.pickle"
-    )  # [zone_index, list of neighbors]
-
-    ZONE_NEIGHBOR_MAP: dict[str, list[str]] = {}
-    for i, row in ZONE_NEIGHBOR_MAP_DF.iterrows():
-        if row["grid_index"] not in COMMUNTIY_ZONE_IDS:
-            continue
-        # Filter neighbors to only include those in the same community
-        neighbors = [
-            neighbor for neighbor in row["neighbors"] if neighbor in COMMUNTIY_ZONE_IDS
+    zone_neighbor_map = {
+        zone_id: [
+            n
+            for n in zone_neighbor_map_full.get(zone_id, [])
+            if n in community_zone_ids
         ]
-        ZONE_NEIGHBOR_MAP.update({row["grid_index"]: neighbors})
+        for zone_id in community_zone_ids
+    }
 
-    # Calculate the number of zones for community COMMUNITY_ID
-    N_ZONES = ZONE_COMMUNITY_MAP[
-        ZONE_COMMUNITY_MAP["community_index"] == community_id
-    ].shape[0]
-
-    DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
-    PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
-
-    DROP_OFF_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_dropoff_forecasts.pkl"
-    PICK_UP_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_pickup_forecasts.pkl"
-
-    # --- INITIALIZE ENVIRONMENT ---
     dropoff_demand_forecaster = IrConvLstmDemandPreForecaster(
-        num_communities=NUM_COMMUNITIES,
-        num_zones=N_TOTAL_ZONES,
-        zone_community_map=ZONE_COMMUNITY_MAP,
+        num_communities=len(COMMUNITY_IDS),
+        num_zones=all_data["n_total_zones"],
+        zone_community_map=zone_community_map,
         demand_data_path=DROP_OFF_DEMAND_FORECAST_DATA_PATH,
     )
-
     pickup_demand_forecaster = IrConvLstmDemandPreForecaster(
-        num_communities=NUM_COMMUNITIES,
-        num_zones=N_TOTAL_ZONES,
-        zone_community_map=ZONE_COMMUNITY_MAP,
+        num_communities=len(COMMUNITY_IDS),
+        num_zones=all_data["n_total_zones"],
+        zone_community_map=zone_community_map,
         demand_data_path=PICK_UP_DEMAND_FORECAST_DATA_PATH,
     )
-
     dropoff_demand_provider = DemandProviderImpl(
-        num_communities=NUM_COMMUNITIES,
-        num_zones=N_TOTAL_ZONES,
-        zone_community_map=ZONE_COMMUNITY_MAP,
+        num_communities=len(COMMUNITY_IDS),
+        num_zones=all_data["n_total_zones"],
+        zone_community_map=zone_community_map,
         demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
         startTime=START_TIME,
         endTime=END_TIME,
     )
-
     pickup_demand_provider = DemandProviderImpl(
-        num_communities=NUM_COMMUNITIES,
-        num_zones=N_TOTAL_ZONES,
-        zone_community_map=ZONE_COMMUNITY_MAP,
+        num_communities=len(COMMUNITY_IDS),
+        num_zones=all_data["n_total_zones"],
+        zone_community_map=zone_community_map,
         demand_data_path=PICK_UP_DEMAND_DATA_PATH,
         startTime=START_TIME,
         endTime=END_TIME,
     )
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    escooter_env = EscooterUICEnv(
-        community_id=community_id,
-        n_zones=N_ZONES,
-        fleet_size=FLEET_SIZE,
-        dropoff_demand_forecaster=dropoff_demand_forecaster,
-        pickup_demand_forecaster=pickup_demand_forecaster,
-        dropoff_demand_provider=dropoff_demand_provider,
-        pickup_demand_provider=pickup_demand_provider,
-        device=device,
-        zone_neighbor_map=ZONE_NEIGHBOR_MAP,
-        zone_index_map=ZONE_INDEX_MAP,
-        user_willingness_fn=USER_WILLINGNESS_FN,
-        max_steps=MAX_STEPS_PER_EPISODE,
-        start_time=START_TIME,
-        step_duration=timedelta(minutes=UIC_STEP_DURATION),
-        reward_weight_demand=REWARD_WEIGHT_DEMAND,
-        reward_weight_rebalancing=REWARD_WEIGHT_REBALANCING,
-        reward_weight_gini=REWARD_WEIGHT_GINI,
-    )
-
-    train_envs = SubprocVecEnv(
+    train_envs = DummyVecEnv(
         [
             make_env(
-                rank=i,
-                n_zones=N_ZONES,
+                rank=0,
+                n_zones=n_zones,
                 dropoff_demand_forecaster=dropoff_demand_forecaster,
                 pickup_demand_forecaster=pickup_demand_forecaster,
                 dropoff_demand_provider=dropoff_demand_provider,
                 pickup_demand_provider=pickup_demand_provider,
                 device=device,
-                zone_neighbor_map=ZONE_NEIGHBOR_MAP,
-                zone_index_map=ZONE_INDEX_MAP,
+                zone_neighbor_map=zone_neighbor_map,
+                zone_index_map=zone_index_map,
                 community_id=community_id,
                 seed=BASE_SEED,
             )
-            for i in range(N_WORKERS)
         ]
     )
-    train_envs = VecNormalize(train_envs)
-    train_envs.save("normalize.pkl")
 
-    eval_env = DummyVecEnv([lambda: Monitor(escooter_env)])
-    eval_env = VecNormalize.load("normalize.pkl", eval_env)
-
-    eval_callback = EvalCallback(
-        eval_env=eval_env,
-        best_model_save_path=UIC_TENSORBOARD_LOG
-        + "/outputs/uic_best_model/"
-        + community_id,
-        log_path=UIC_TENSORBOARD_LOG + "/outputs/eval_logs/",
-        eval_freq=100,
+    train_envs = VecNormalize(
+        train_envs, norm_obs=True, norm_reward=False, clip_obs=10.0
     )
 
     agent = UserIncentiveCoordinator(
@@ -317,47 +255,66 @@ def train_uic(community_id: str) -> None:
         policy_kwargs=UIC_POLICY_KWARGS,
         vf_coef=UIC_VF_COEF,
         target_kl=UIC_TARGET_KL,
+        device=device,
         tensorboard_log=UIC_TENSORBOARD_LOG,
     )
 
-    agent.train(
-        total_timesteps=TOTAL_TIME_STEPS,
-        callback=eval_callback,
+    agent.model.tensorboard_log = f"{UIC_TENSORBOARD_LOG}/{community_id}"
+
+    agent.train(total_timesteps=TOTAL_TIME_STEPS, callback=None)
+
+    model_save_path = f"{UIC_TENSORBOARD_LOG}/outputs/{community_id}_uic_model_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    env_save_path = f"{UIC_TENSORBOARD_LOG}/outputs/{community_id}_vecnormalize.pkl"
+
+    agent.model.save(model_save_path)
+    train_envs.save(env_save_path)
+
+    print(
+        f"--- Training completed for community {community_id}. Model saved to {model_save_path} ---"
     )
-
-    train_envs.save(
-        UIC_TENSORBOARD_LOG + "/outputs/" + community_id + "_env_train_normalize.pkl"
-    )
-
-    agent.model.save(
-        UIC_TENSORBOARD_LOG
-        + "/outputs/"
-        + community_id
-        + "_UIC_"
-        + datetime.now().strftime("%Y%m%d-%H%M%S")
-    )
-
-    print("Training completed.")
+    return community_id
 
 
-def train_all_uics() -> None:
-    """Train UIC agents for all communities sequentially.
-
-    Args:
-        None
-
-    Returns:
-        None
-
-    Raises:
-        None
+def train_all_uics_parallel() -> None:
     """
-    for community_id in COMMUNITY_IDS:
-        print(f"Training UIC for community {community_id}...")
-        train_uic(community_id)
-        print(f"UIC training completed for community {community_id}.\n")
+    Trains all UIC agents in parallel, assigning each to a different available GPU.
+    """
+    print("Loading all data into memory...")
+    zone_community_map = pd.read_pickle(
+        "/home/ruroit00/rebalancing_framework/processed_data/grid_community_map.pickle"
+    )
+    zone_neighbor_map_df = pd.read_pickle(
+        "/home/ruroit00/rebalancing_framework/processed_data/grid_cells_neighbors_list.pickle"
+    )
+
+    zone_neighbor_map_full = {
+        row["grid_index"]: row["neighbors"]
+        for _, row in zone_neighbor_map_df.iterrows()
+    }
+
+    all_data = {
+        "zone_community_map": zone_community_map,
+        "zone_neighbor_map": zone_neighbor_map_full,
+        "n_total_zones": len(zone_community_map),
+    }
+
+    tasks = [
+        (community_id, AVAILABLE_GPUS[i % N_GPUS], all_data)
+        for i, community_id in enumerate(COMMUNITY_IDS)
+    ]
+
+    print(
+        f"\nStarting parallel training for {len(COMMUNITY_IDS)} agents across {N_GPUS} GPUs: {AVAILABLE_GPUS}..."
+    )
+    mp.set_start_method("spawn", force=True)
+
+    with mp.Pool(processes=N_GPUS) as pool:
+        results = pool.map(train_uic, tasks)
+
+    print("\n--- ALL UIC TRAINING COMPLETED ---")
+    for community_id in results:
+        print(f"- Finished: {community_id}")
 
 
 if __name__ == "__main__":
-    train_all_uics()
-    # train_uic(COMMUNITY_IDS[0])
+    train_all_uics_parallel()

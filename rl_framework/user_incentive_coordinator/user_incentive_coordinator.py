@@ -12,6 +12,7 @@ import torch.nn as nn
 from stable_baselines3.common.vec_env import VecEnv
 from stable_baselines3.common.type_aliases import MaybeCallback
 from stable_baselines3.common.utils import get_schedule_fn
+import torch
 
 
 class UserIncentiveCoordinator:
@@ -34,6 +35,7 @@ class UserIncentiveCoordinator:
         clip_range: float,
         ent_coef: float,
         verbose: int,
+        device: torch.device,
         tensorboard_log: str | None,
         policy_kwargs: dict | None = None,
         vf_coef: float = 0.5,
@@ -88,6 +90,7 @@ class UserIncentiveCoordinator:
             policy_kwargs=policy_kwargs,
             vf_coef=vf_coef,
             target_kl=target_kl,
+            device=device,
         )
 
     def train(self, total_timesteps: int, callback: MaybeCallback) -> PPO:
