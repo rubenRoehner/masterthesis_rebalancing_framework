@@ -40,15 +40,15 @@ MAX_STEPS = 400
 RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250713-220126.pth"
 # RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250703-173727.pth"
 UIC_AGENT_PATHS = [
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/uic_best_model/861faa44fffffff/best_model.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/uic_best_model/861faa637ffffff/best_model.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/uic_best_model/861faa707ffffff/best_model.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/uic_best_model/861faa717ffffff/best_model.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/uic_best_model/861faa71fffffff/best_model.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/uic_best_model/861faa787ffffff/best_model.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/uic_best_model/861faa78fffffff/best_model.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/uic_best_model/861faa7a7ffffff/best_model.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/uic_best_model/861faa7afffffff/best_model.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa44fffffff_uic_model_20250716-085600.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa637ffffff_uic_model_20250716-085657.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa707ffffff_uic_model_20250716-085545.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa717ffffff_uic_model_20250716-093542.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa71fffffff_uic_model_20250716-093605.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa787ffffff_uic_model_20250716-093707.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa78fffffff_uic_model_20250716-101452.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa7a7ffffff_uic_model_20250716-101456.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa7afffffff_uic_model_20250716-101724.zip",
 ]
 
 CONFIGURATIONS = [
