@@ -179,4 +179,4 @@ cython_debug/
 *.pth
 
 # VS Code
-.vscode/
+.vscode/rl_framework/runs/**/events.out.tfevents.*

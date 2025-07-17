@@ -401,3 +401,19 @@ class RegionalDistributionCoordinator:
         self.policy_network.eval()
         self.target_network.eval()
         self.epsilon = 0.0
+
+    def to(self, device: torch.device) -> None:
+        """Move the agent's networks to the specified device.
+
+        Args:
+            device: PyTorch device to move networks to
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
+        self.device = device
+        self.policy_network.to(device)
+        self.target_network.to(device)
