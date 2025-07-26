@@ -63,7 +63,7 @@ timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
 study_filename = f"rdc_ho_{study_label}_{timestamp}"
 
-N_TRIALS = 100
+N_TRIALS = 50
 
 # global parameters
 FLEET_SIZE = 810
@@ -94,8 +94,13 @@ ZONE_INDEX_MAP: dict[str, int] = {}
 for i, row in ZONE_COMMUNITY_MAP.iterrows():
     ZONE_INDEX_MAP.update({row["grid_index"]: i})
 
-RDC_ACTION_VALUES = [-15, -10, -5, 0, 5, 10, 15]
+RDC_ACTION_VALUES = [-8, -4, -2, 0, 2, 4, 8]
 RDC_FEATURES_PER_COMMUNITY = 3
+
+# --- REWARD WEIGHTS ---
+RDC_REWARD_WEIGHT_DEMAND = 7.0
+RDC_REWARD_WEIGHT_REBALANCING = 0.1
+RDC_REWARD_WEIGHT_GINI = 6.0
 
 
 DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
@@ -203,18 +208,18 @@ def objective(trial: optuna.Trial) -> float:
     # --- HYPERPARAMETERS ---
     if OPTIMIZE_REPLAY_BUFFER:
         RDC_REPLAY_BUFFER_CAPACITY = trial.suggest_int(
-            "rdc_replay_buffer_capacity", 1_200, 10_800, step=100
+            "rdc_replay_buffer_capacity", 5_000, 120_800, log=True
         )
         RDC_REPLAY_BUFFER_ALPHA = trial.suggest_float(
-            "rdc_replay_buffer_alpha", 0.68, 0.92, step=0.01
+            "rdc_replay_buffer_alpha", 0.0, 1.0, step=0.1
         )
         RDC_REPLAY_BUFFER_BETA_START = trial.suggest_float(
-            "rdc_replay_buffer_beta_start", 0.17, 0.53, step=0.01
+            "rdc_replay_buffer_beta_start", 0.1, 0.6, step=0.1
         )
         RDC_REPLAY_BUFFER_BETA_FRAMES = trial.suggest_int(
-            "rdc_replay_buffer_beta_frames", 30_000, 220_000, step=10_000
+            "rdc_replay_buffer_beta_frames", 3_000, 500_000, log=True
         )
-        RDC_TAU = trial.suggest_float("rdc_tau", 0.0078, 0.0102, step=0.0001)
+        RDC_TAU = trial.suggest_float("rdc_tau", 1e-4, 1e-1, log=True)
     else:
         # rdc_replay_buffer_capacity: 3000
         # rdc_replay_buffer_alpha: 0.8
@@ -222,66 +227,42 @@ def objective(trial: optuna.Trial) -> float:
         # rdc_replay_buffer_beta_frames: 80000
         # rdc_tau: 0.008
         RDC_REPLAY_BUFFER_CAPACITY = 3_000
-        RDC_REPLAY_BUFFER_ALPHA = 0.8
-        RDC_REPLAY_BUFFER_BETA_START = 0.3
+        RDC_REPLAY_BUFFER_ALPHA = 0.4
+        RDC_REPLAY_BUFFER_BETA_START = 0.41
         RDC_REPLAY_BUFFER_BETA_FRAMES = 80_000
-        RDC_TAU = 0.008
+        RDC_TAU = 0.005
 
     if OPTIMIZE_ARCHITECTURE:
-        RDC_BATCH_SIZE = trial.suggest_categorical("rdc_batch_size", [128, 256, 512])
-        RDC_HIDDEN_DIM = trial.suggest_categorical("rdc_hidden_dim", [128, 256])
+        RDC_BATCH_SIZE = trial.suggest_categorical(
+            "rdc_batch_size", [64, 128, 256, 512]
+        )
+        RDC_HIDDEN_DIM = trial.suggest_categorical(
+            "rdc_hidden_dim", [64, 128, 256, 512]
+        )
     else:
-        # 2,256,256,96.65786108532586
-        # rdc_batch_size: 512
-        # rdc_hidden_dim: 128
-        RDC_BATCH_SIZE = 512
-        RDC_HIDDEN_DIM = 128
+        RDC_BATCH_SIZE = 256
+        RDC_HIDDEN_DIM = 256
 
     if OPTIMIZE_LEARNING_RATE:
-        RDC_LR = trial.suggest_float("rdc_lr", 4e-7, 9e-6, log=True)
-        RDC_LR_STEP_SIZE = trial.suggest_int("rdc_lr_step_size", 2100, 3300, step=100)
-        RDC_LR_GAMMA = trial.suggest_float("rdc_lr_gamma", 0.917, 0.953, step=0.001)
-        RDC_GAMMA = trial.suggest_float("rdc_gamma", 0.979, 0.991, step=0.001)
+        RDC_LR = trial.suggest_float("rdc_lr", 1e-6, 3e-4, log=True)
+        RDC_LR_STEP_SIZE = trial.suggest_int("rdc_lr_step_size", 500, 5_000, step=250)
+        RDC_LR_GAMMA = trial.suggest_float("rdc_lr_gamma", 0.5, 0.99, step=0.01)
+        RDC_GAMMA = trial.suggest_float("rdc_gamma", 0.90, 0.999, step=0.001)
     else:
-        # rdc_lr: 2.6652102506330767e-06
-        # rdc_lr_step_size: 2800
-        # rdc_lr_gamma: 0.93
-        # rdc_gamma: 0.99
-        RDC_LR = 2.6652102506330767e-06
-        RDC_LR_STEP_SIZE = 2800
-        RDC_LR_GAMMA = 0.93
-        RDC_GAMMA = 0.99
+        RDC_LR = 1.126032374253218e-06
+        RDC_LR_STEP_SIZE = 3500
+        RDC_LR_GAMMA = 0.9199999999999999
+        RDC_GAMMA = 0.915
 
     RDC_EPSILON_START = 1.0
     if OPTIMIZE_EXPLORATION:
-        RDC_EPSILON_END = trial.suggest_float(
-            "rdc_epsilon_end", 0.047, 0.083, step=0.001
-        )
+        RDC_EPSILON_END = trial.suggest_float("rdc_epsilon_end", 0.01, 0.2, step=0.001)
         RDC_EPSILON_DECAY = trial.suggest_float(
-            "rdc_epsilon_decay", 0.991, 0.999, step=0.001
+            "rdc_epsilon_decay", 0.95, 0.9999, log=True
         )
     else:
-        # 27,0.04,0.9983,97.58201458861882
-        # rdc_epsilon_end: 0.06
-        # rdc_epsilon_decay: 0.996
-        RDC_EPSILON_END = 0.06
-        RDC_EPSILON_DECAY = 0.996
-
-    if OPTIMIZE_REWARD_WEIGHTS:
-        RDC_REWARD_WEIGHT_DEMAND = trial.suggest_float(
-            "rdc_reward_weight_demand", 0.1, 0.5, step=0.1
-        )
-        RDC_REWARD_WEIGHT_REBALANCING = trial.suggest_float(
-            "rdc_reward_weight_rebalancing", 1.3, 2.2, step=0.1
-        )
-        RDC_REWARD_WEIGHT_GINI = trial.suggest_float(
-            "rdc_reward_weight_gini", 0.0, 0.1, step=0.01
-        )
-    else:
-        # 26,1.4,1.05,0.07,98.27922198476875
-        RDC_REWARD_WEIGHT_DEMAND = 0.3
-        RDC_REWARD_WEIGHT_REBALANCING = 2.1
-        RDC_REWARD_WEIGHT_GINI = 0.05
+        RDC_EPSILON_END = 0.10
+        RDC_EPSILON_DECAY = 0.99998
 
     RDC_STEP_DURATION = 60  # in minutes
 
@@ -401,6 +382,9 @@ if __name__ == "__main__":
         direction="maximize",
         sampler=optuna.samplers.TPESampler(),
         study_name="escooter_rdc_hyperparameter_optimization",
+        pruner=optuna.pruners.MedianPruner(
+            n_warmup_steps=10,
+        ),
     )
 
     study.set_user_attr("optimization_target", study_label)
