@@ -208,61 +208,52 @@ def objective(trial: optuna.Trial) -> float:
     # --- HYPERPARAMETERS ---
     if OPTIMIZE_REPLAY_BUFFER:
         RDC_REPLAY_BUFFER_CAPACITY = trial.suggest_int(
-            "rdc_replay_buffer_capacity", 5_000, 120_800, log=True
+            "rdc_replay_buffer_capacity", 1_000, 45_800, log=True
         )
         RDC_REPLAY_BUFFER_ALPHA = trial.suggest_float(
-            "rdc_replay_buffer_alpha", 0.0, 1.0, step=0.1
+            "rdc_replay_buffer_alpha", 0.0, 0.8, step=0.1
         )
         RDC_REPLAY_BUFFER_BETA_START = trial.suggest_float(
-            "rdc_replay_buffer_beta_start", 0.1, 0.6, step=0.1
+            "rdc_replay_buffer_beta_start", 0.1, 0.55, step=0.01
         )
         RDC_REPLAY_BUFFER_BETA_FRAMES = trial.suggest_int(
-            "rdc_replay_buffer_beta_frames", 3_000, 500_000, log=True
+            "rdc_replay_buffer_beta_frames", 1_000, 50_000, log=True
         )
-        RDC_TAU = trial.suggest_float("rdc_tau", 1e-4, 1e-1, log=True)
+        RDC_TAU = trial.suggest_float("rdc_tau", 5e-4, 1e-1, log=True)
     else:
-        # rdc_replay_buffer_capacity: 3000
-        # rdc_replay_buffer_alpha: 0.8
-        # rdc_replay_buffer_beta_start: 0.30000000000000004
-        # rdc_replay_buffer_beta_frames: 80000
-        # rdc_tau: 0.008
-        RDC_REPLAY_BUFFER_CAPACITY = 3_000
+        RDC_REPLAY_BUFFER_CAPACITY = 29_000
         RDC_REPLAY_BUFFER_ALPHA = 0.4
-        RDC_REPLAY_BUFFER_BETA_START = 0.41
-        RDC_REPLAY_BUFFER_BETA_FRAMES = 80_000
-        RDC_TAU = 0.005
+        RDC_REPLAY_BUFFER_BETA_START = 0.1
+        RDC_REPLAY_BUFFER_BETA_FRAMES = 15_000
+        RDC_TAU = 0.0033
 
     if OPTIMIZE_ARCHITECTURE:
-        RDC_BATCH_SIZE = trial.suggest_categorical(
-            "rdc_batch_size", [64, 128, 256, 512]
-        )
-        RDC_HIDDEN_DIM = trial.suggest_categorical(
-            "rdc_hidden_dim", [64, 128, 256, 512]
-        )
+        RDC_BATCH_SIZE = trial.suggest_categorical("rdc_batch_size", [128, 256, 512])
+        RDC_HIDDEN_DIM = trial.suggest_categorical("rdc_hidden_dim", [128, 256, 512])
     else:
-        RDC_BATCH_SIZE = 256
+        RDC_BATCH_SIZE = 512
         RDC_HIDDEN_DIM = 256
 
     if OPTIMIZE_LEARNING_RATE:
-        RDC_LR = trial.suggest_float("rdc_lr", 1e-6, 3e-4, log=True)
-        RDC_LR_STEP_SIZE = trial.suggest_int("rdc_lr_step_size", 500, 5_000, step=250)
-        RDC_LR_GAMMA = trial.suggest_float("rdc_lr_gamma", 0.5, 0.99, step=0.01)
+        RDC_LR = trial.suggest_float("rdc_lr", 1e-6, 1e-5, log=True)
+        RDC_LR_STEP_SIZE = trial.suggest_int("rdc_lr_step_size", 2_000, 5_000, step=250)
+        RDC_LR_GAMMA = trial.suggest_float("rdc_lr_gamma", 0.88, 0.99, step=0.01)
         RDC_GAMMA = trial.suggest_float("rdc_gamma", 0.90, 0.999, step=0.001)
     else:
-        RDC_LR = 1.126032374253218e-06
-        RDC_LR_STEP_SIZE = 3500
-        RDC_LR_GAMMA = 0.9199999999999999
+        RDC_LR = 1e-06
+        RDC_LR_STEP_SIZE = 4250
+        RDC_LR_GAMMA = 0.92
         RDC_GAMMA = 0.915
 
     RDC_EPSILON_START = 1.0
     if OPTIMIZE_EXPLORATION:
-        RDC_EPSILON_END = trial.suggest_float("rdc_epsilon_end", 0.01, 0.2, step=0.001)
+        RDC_EPSILON_END = trial.suggest_float("rdc_epsilon_end", 0.01, 0.18, step=0.001)
         RDC_EPSILON_DECAY = trial.suggest_float(
             "rdc_epsilon_decay", 0.95, 0.9999, log=True
         )
     else:
-        RDC_EPSILON_END = 0.10
-        RDC_EPSILON_DECAY = 0.99998
+        RDC_EPSILON_END = 0.045
+        RDC_EPSILON_DECAY = 0.979
 
     RDC_STEP_DURATION = 60  # in minutes
 
