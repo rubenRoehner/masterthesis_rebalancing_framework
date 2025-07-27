@@ -39,14 +39,12 @@ OPTIMIZE_LEARNING_RATE = True
 OPTIMIZE_REPLAY_BUFFER = True
 OPTIMIZE_ARCHITECTURE = True
 OPTIMIZE_EXPLORATION = True
-OPTIMIZE_REWARD_WEIGHTS = True
 
 FLAG_LABELS = {
     "OPTIMIZE_REPLAY_BUFFER": "replaybuffer",
     "OPTIMIZE_ARCHITECTURE": "architecture",
     "OPTIMIZE_LEARNING_RATE": "learningrate",
     "OPTIMIZE_EXPLORATION": "exploration",
-    "OPTIMIZE_REWARD_WEIGHTS": "rewardweights",
 }
 
 active_flags = [
@@ -63,7 +61,7 @@ timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
 study_filename = f"rdc_ho_{study_label}_{timestamp}"
 
-N_TRIALS = 50
+N_TRIALS = 100
 
 # global parameters
 FLEET_SIZE = 810
@@ -106,8 +104,13 @@ RDC_REWARD_WEIGHT_GINI = 6.0
 DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
 PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
 
-DROP_OFF_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_dropoff_forecasts.pkl"
-PICK_UP_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_pickup_forecasts.pkl"
+# Imperfect demand forecasting (Update Env)
+# DROP_OFF_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_dropoff_forecasts.pkl"
+# PICK_UP_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_pickup_forecasts.pkl"
+
+# Perfect demand forecasting (Update Env)
+DROP_OFF_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
+PICK_UP_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
 
 # --- INITIALIZE ENVIRONMENT ---
 dropoff_demand_forecaster = IrConvLstmDemandPreForecaster(
@@ -208,52 +211,52 @@ def objective(trial: optuna.Trial) -> float:
     # --- HYPERPARAMETERS ---
     if OPTIMIZE_REPLAY_BUFFER:
         RDC_REPLAY_BUFFER_CAPACITY = trial.suggest_int(
-            "rdc_replay_buffer_capacity", 1_000, 45_800, log=True
+            "rdc_replay_buffer_capacity", 1_000, 45_000, log=True
         )
         RDC_REPLAY_BUFFER_ALPHA = trial.suggest_float(
-            "rdc_replay_buffer_alpha", 0.0, 0.8, step=0.1
+            "rdc_replay_buffer_alpha", 0.1, 0.4, step=0.1
         )
         RDC_REPLAY_BUFFER_BETA_START = trial.suggest_float(
-            "rdc_replay_buffer_beta_start", 0.1, 0.55, step=0.01
+            "rdc_replay_buffer_beta_start", 0.1, 0.2, step=0.01
         )
         RDC_REPLAY_BUFFER_BETA_FRAMES = trial.suggest_int(
-            "rdc_replay_buffer_beta_frames", 1_000, 50_000, log=True
+            "rdc_replay_buffer_beta_frames", 7_000, 35_000, log=True
         )
-        RDC_TAU = trial.suggest_float("rdc_tau", 5e-4, 1e-1, log=True)
+        RDC_TAU = trial.suggest_float("rdc_tau", 5e-3, 1e-2, log=True)
     else:
-        RDC_REPLAY_BUFFER_CAPACITY = 29_000
-        RDC_REPLAY_BUFFER_ALPHA = 0.4
-        RDC_REPLAY_BUFFER_BETA_START = 0.1
-        RDC_REPLAY_BUFFER_BETA_FRAMES = 15_000
-        RDC_TAU = 0.0033
+        RDC_REPLAY_BUFFER_CAPACITY = 12_000
+        RDC_REPLAY_BUFFER_ALPHA = 0.2
+        RDC_REPLAY_BUFFER_BETA_START = 0.47
+        RDC_REPLAY_BUFFER_BETA_FRAMES = 3_500
+        RDC_TAU = 0.0021
 
     if OPTIMIZE_ARCHITECTURE:
-        RDC_BATCH_SIZE = trial.suggest_categorical("rdc_batch_size", [128, 256, 512])
-        RDC_HIDDEN_DIM = trial.suggest_categorical("rdc_hidden_dim", [128, 256, 512])
+        RDC_BATCH_SIZE = trial.suggest_categorical("rdc_batch_size", [128, 256])
+        RDC_HIDDEN_DIM = trial.suggest_categorical("rdc_hidden_dim", [128, 256])
     else:
-        RDC_BATCH_SIZE = 512
-        RDC_HIDDEN_DIM = 256
+        RDC_BATCH_SIZE = 128
+        RDC_HIDDEN_DIM = 128
 
     if OPTIMIZE_LEARNING_RATE:
-        RDC_LR = trial.suggest_float("rdc_lr", 1e-6, 1e-5, log=True)
-        RDC_LR_STEP_SIZE = trial.suggest_int("rdc_lr_step_size", 2_000, 5_000, step=250)
-        RDC_LR_GAMMA = trial.suggest_float("rdc_lr_gamma", 0.88, 0.99, step=0.01)
-        RDC_GAMMA = trial.suggest_float("rdc_gamma", 0.90, 0.999, step=0.001)
+        RDC_LR = trial.suggest_float("rdc_lr", 1e-6, 2e-6, log=True)
+        RDC_LR_STEP_SIZE = trial.suggest_int("rdc_lr_step_size", 4_000, 5_500, step=100)
+        RDC_LR_GAMMA = trial.suggest_float("rdc_lr_gamma", 0.95, 0.99, step=0.001)
+        RDC_GAMMA = trial.suggest_float("rdc_gamma", 0.94, 0.999, step=0.001)
     else:
-        RDC_LR = 1e-06
-        RDC_LR_STEP_SIZE = 4250
-        RDC_LR_GAMMA = 0.92
-        RDC_GAMMA = 0.915
+        RDC_LR = 1.5e-06
+        RDC_LR_STEP_SIZE = 4500
+        RDC_LR_GAMMA = 0.95
+        RDC_GAMMA = 0.958
 
     RDC_EPSILON_START = 1.0
     if OPTIMIZE_EXPLORATION:
-        RDC_EPSILON_END = trial.suggest_float("rdc_epsilon_end", 0.01, 0.18, step=0.001)
+        RDC_EPSILON_END = trial.suggest_float("rdc_epsilon_end", 0.03, 0.15, step=0.001)
         RDC_EPSILON_DECAY = trial.suggest_float(
-            "rdc_epsilon_decay", 0.95, 0.9999, log=True
+            "rdc_epsilon_decay", 0.96, 0.98, log=True
         )
     else:
-        RDC_EPSILON_END = 0.045
-        RDC_EPSILON_DECAY = 0.979
+        RDC_EPSILON_END = 0.041
+        RDC_EPSILON_DECAY = 0.964
 
     RDC_STEP_DURATION = 60  # in minutes
 
