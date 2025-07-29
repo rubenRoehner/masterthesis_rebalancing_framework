@@ -34,11 +34,11 @@ COMMUNITY_IDS = [
 GLOBAL_FLEET_SIZE = 810
 N_EPOCHS = 20
 MAX_STEPS_PER_EPISODE = 256
-TOTAL_TIME_STEPS = 1_000_000
+TOTAL_TIME_STEPS = 100_000
 START_TIME = datetime(2025, 2, 11, 14, 0)
 END_TIME = datetime(2025, 5, 18, 15, 0)
 
-RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250713-220126.pth"
+RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250723-110704.pth"
 
 # --- Parallelization settings ---
 AVAILABLE_GPUS = [1, 2, 3]
@@ -49,24 +49,24 @@ BASE_SEED = 42
 UIC_POLICY = "MultiInputPolicy"
 UIC_STEP_DURATION = 60
 REWARD_WEIGHT_DEMAND = 1.0
-REWARD_WEIGHT_REBALANCING = 5.0
-REWARD_WEIGHT_GINI = 0.0
+REWARD_WEIGHT_REBALANCING = 0.3
+REWARD_WEIGHT_GINI = 0.3
 
 # Optimized hyperparameters
 UIC_N_STEPS = 1024
-UIC_LEARNING_RATE = 2.056573223956345e-06
-UIC_GAMMA = 0.936
-UIC_GAE_LAMBDA = 0.902
-UIC_CLIP_RANGE = 0.2
-UIC_ENT_COEF = 0.00011215783666166426
-UIC_BATCH_SIZE = 32
+UIC_LEARNING_RATE = 3e-05
+UIC_GAMMA = 0.975
+UIC_GAE_LAMBDA = 0.95
+UIC_CLIP_RANGE = 0.08
+UIC_ENT_COEF = 0.002
+UIC_BATCH_SIZE = 64
 UIC_VERBOSE = 0
 UIC_POLICY_KWARGS = {
-    "net_arch": dict(pi=[128, 128, 128], vf=[128, 128, 128]),
+    "net_arch": dict(pi=[128, 128, 128], vf=[256, 128, 128]),
     "activation_fn": torch.nn.ReLU,
 }
-UIC_VF_COEF = 0.413
-UIC_TARGET_KL = 0.022
+UIC_VF_COEF = 0.7
+UIC_TARGET_KL = 0.012
 UIC_TENSORBOARD_LOG = "rl_framework/runs/UIC/"
 
 # --- Data Paths ---

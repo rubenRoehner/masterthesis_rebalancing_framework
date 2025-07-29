@@ -9,6 +9,11 @@ for the PPO-based User Incentive Coordinator agent in e-scooter rebalancing.
 import sys
 import os
 
+from rl_framework.regional_distribution_coordinator.regional_distribution_coordinator import (
+    RegionalDistributionCoordinator,
+)
+from training_loop import RDC_ACTION_VALUES, RDC_HIDDEN_DIM, RDC_FEATURES_PER_COMMUNITY
+
 # Add the parent directories to Python path
 sys.path.append(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -87,39 +92,38 @@ BASE_SEED = 42
 # UIC parameters
 UIC_STEP_DURATION = 60  # in minutes
 
-REWARD_WEIGHT_DEMAND = 0.5
-REWARD_WEIGHT_REBALANCING = 0.9
-REWARD_WEIGHT_GINI = 0.12
+REWARD_WEIGHT_DEMAND = 1.0
+REWARD_WEIGHT_REBALANCING = 0.3
+REWARD_WEIGHT_GINI = 0.3
 
 UIC_POLICY = "MultiInputPolicy"
 
 # {'learning_rate': 1.9533753916143637e-05, 'n_steps': 512, 'batch_size': 32, 'clip_range': 0.19, 'ent_coef': 0.00034931655259393753, 'vf_coef': 0.5}
 # {'learning_rate': 2.403268653036228e-06, 'n_steps': 512, 'batch_size': 32, 'clip_range': 0.23, 'ent_coef': 1.8983075157031546e-05, 'vf_coef': 0.36000000000000004}
-UIC_LEARNING_RATE = 2.403268653036228e-06
-UIC_N_STEPS = 512
-UIC_BATCH_SIZE = 32
-UIC_CLIP_RANGE = 0.23
-UIC_ENT_COEF = 1.8983e-05
-UIC_VF_COEF = 0.36
+UIC_LEARNING_RATE = 3e-05
+UIC_N_STEPS = 1024
+UIC_BATCH_SIZE = 64
+UIC_CLIP_RANGE = 0.08
+UIC_ENT_COEF = 0.002
+UIC_VF_COEF = 0.7
 
 # {'gamma': 0.934, 'gae_lambda': 0.89, 'use_target_kl': None}
 # {'gamma': 0.932, 'gae_lambda': 0.954, 'use_target_kl': 0.022}
-UIC_GAMMA = 0.932
-UIC_GAE_LAMBDA = 0.954
-UIC_TARGET_KL = 0.022
+UIC_GAMMA = 0.975
+UIC_GAE_LAMBDA = 0.95
+UIC_TARGET_KL = 0.012
 
 # {'n_layers': 3, 'hidden_size': 128, 'activation': 'ReLU'}
 # {'n_layers': 2, 'hidden_size': 64, 'activation': 'Tanh'}
 UIC_POLICY_KWARGS = {
-    "net_arch": dict(
-        pi=[64, 64],
-        vf=[64, 64],
-    ),
+    "net_arch": dict(pi=[128, 128, 128], vf=[256, 128, 128]),
     "activation_fn": torch.nn.ReLU,
 }
 
 UIC_VERBOSE = 1
 UIC_TENSORBOARD_LOG = "rl_framework/runs/"
+
+RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250723-110704.pth"
 
 ZONE_COMMUNITY_MAP: pd.DataFrame = pd.read_pickle(
     "/home/ruroit00/rebalancing_framework/processed_data/grid_community_map.pickle"
@@ -271,6 +275,15 @@ def make_env(
     """
 
     def _init():
+        rdc_agent_instance = RegionalDistributionCoordinator(
+            device=device,
+            hidden_dim=RDC_HIDDEN_DIM,
+            action_values=RDC_ACTION_VALUES,
+            num_communities=NUM_COMMUNITIES,
+            state_dim=NUM_COMMUNITIES * RDC_FEATURES_PER_COMMUNITY,
+        )
+        rdc_network = torch.load(RDC_AGENT_PATH, map_location=device)
+        rdc_agent_instance.set_evaluation_mode(rdc_network)
         env: gym.Env = EscooterUICEnv(
             community_id=COMMUNITY_ID,
             n_zones=n_zones,
@@ -289,6 +302,7 @@ def make_env(
             reward_weight_demand=REWARD_WEIGHT_DEMAND,
             reward_weight_rebalancing=REWARD_WEIGHT_REBALANCING,
             reward_weight_gini=REWARD_WEIGHT_GINI,
+            rdc_agent=rdc_agent_instance,
         )
         env.reset(seed=seed + rank)
         env = Monitor(env)
@@ -313,12 +327,12 @@ def objective(trial: optuna.Trial) -> float:
         None
     """
     if OPTIMIZE_PPO_CORE:
-        learning_rate = trial.suggest_float("learning_rate", 7e-7, 5e-6, log=True)
-        n_steps = trial.suggest_categorical("n_steps", [512, 1024])
-        batch_size = trial.suggest_categorical("batch_size", [32, 64])
-        clip_range = trial.suggest_float("clip_range", 0.087, 0.243, step=0.001)
-        ent_coef = trial.suggest_float("ent_coef", 1e-5, 2.75e-3, log=True)
-        vf_coef = trial.suggest_float("vf_coef", 0.339, 0.591, step=0.001)
+        learning_rate = trial.suggest_float("learning_rate", 5e-6, 1e-3, log=True)
+        n_steps = trial.suggest_categorical("n_steps", [512, 1024, 2048])
+        batch_size = trial.suggest_categorical("batch_size", [64, 128, 256])
+        clip_range = trial.suggest_float("clip_range", 0.05, 0.3, step=0.05)
+        ent_coef = trial.suggest_float("ent_coef", 1e-4, 5e-2, log=True)
+        vf_coef = trial.suggest_float("vf_coef", 0.3, 1, step=0.1)
     else:
         learning_rate = UIC_LEARNING_RATE
         n_steps = UIC_N_STEPS
@@ -328,13 +342,17 @@ def objective(trial: optuna.Trial) -> float:
         vf_coef = UIC_VF_COEF
 
     if OPTIMIZE_ARCHITECTURE:
-        n_layers = trial.suggest_int("n_layers", 2, 3)
-        hidden_size = trial.suggest_categorical("hidden_size", [64, 128])
-        activation_name = trial.suggest_categorical("activation", ["ReLU", "Tanh"])
+        n_layers = trial.suggest_int("n_layers", 2, 4)
+        hidden_size = trial.suggest_categorical("hidden_size", [64, 96, 128, 256])
+        activation_name = trial.suggest_categorical(
+            "activation", ["ReLU", "Tanh", "LeakyReLU", "SiLU"]
+        )
         if activation_name == "ReLU":
             activation_fn = torch.nn.ReLU
         elif activation_name == "Tanh":
             activation_fn = torch.nn.Tanh
+        elif activation_name == "SiLU":
+            activation_fn = torch.nn.SiLU
         else:
             activation_fn = torch.nn.LeakyReLU
 
@@ -349,10 +367,12 @@ def objective(trial: optuna.Trial) -> float:
         policy_kwargs = UIC_POLICY_KWARGS
 
     if OPTIMIZE_STABILITY:
-        gamma = trial.suggest_float("gamma", 0.918, 0.957, step=0.001)
-        gae_lambda = trial.suggest_float("gae_lambda", 0.892, 0.960, step=0.001)
+        gamma = trial.suggest_float("gamma", 0.90, 0.995, step=0.001)
+        gae_lambda = trial.suggest_float("gae_lambda", 0.8, 0.98, step=0.001)
 
-        raw_target_kl = trial.suggest_categorical("use_target_kl", [0.01, 0.02, 0.022])
+        raw_target_kl = trial.suggest_categorical(
+            "use_target_kl", [None, 0.015, 0.02, 0.03]
+        )
         if raw_target_kl is None:
             target_kl: float | None = None
         else:
