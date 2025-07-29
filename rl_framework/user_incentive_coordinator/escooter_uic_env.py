@@ -162,7 +162,7 @@ class EscooterUICEnv(gym.Env):
         }
 
     def step(self, action: np.ndarray) -> tuple[dict, float, bool, bool, dict]:
-        """Executes one full time step, including optional RDC action."""
+        """Executes one full time step, including RDC action."""
         if self.rdc_agent:
             self._simulate_rdc_step()
 
@@ -219,6 +219,10 @@ class EscooterUICEnv(gym.Env):
         self.current_step += 1
         terminated = self.current_step >= self.max_steps
         next_observation = self.get_observation()
+
+        assert (
+            self.global_vehicle_counts.sum() == self.fleet_size
+        ), f"Vehicle counts do not match the total fleet size after demand simulation. Expected: {self.fleet_size}, Actual: {self.global_vehicle_counts.sum()}"
 
         return (
             next_observation,
@@ -384,7 +388,6 @@ class EscooterUICEnv(gym.Env):
                 total_vehicles_rebalanced += n_scooter
 
         if int(modified_dropoff_demand.sum()) != int(initial_dropoff_sum):
-            # Allow for small floating point discrepancies by converting to int
             pass
 
         return modified_dropoff_demand, total_vehicles_rebalanced
@@ -397,6 +400,25 @@ class EscooterUICEnv(gym.Env):
         current_vehicle_counts: np.ndarray,
     ) -> tuple[np.ndarray, int]:
         """Updates vehicle counts based on pickup and dropoff demand."""
+        fleet_size = current_vehicle_counts.sum()
+
+        pickup_total = pickup_demand.sum()
+        dropoff_total = dropoff_demand.sum()
+
+        if pickup_total != dropoff_total:
+            diff = int(abs(pickup_total - dropoff_total))
+
+            if pickup_total < dropoff_total:
+                indices = np.random.choice(n_zones, size=diff, replace=True)
+                pickup_demand = pickup_demand.copy()
+                for idx in indices:
+                    pickup_demand[idx] += 1
+            else:
+                indices = np.random.choice(n_zones, size=diff, replace=True)
+                dropoff_demand = dropoff_demand.copy()
+                for idx in indices:
+                    dropoff_demand[idx] += 1
+
         satisfied_pickups = np.minimum(pickup_demand, current_vehicle_counts).astype(
             int
         )
@@ -413,19 +435,23 @@ class EscooterUICEnv(gym.Env):
                     dropoff_proportions * total_satisfied_pickups
                 ).astype(int)
 
-                remainder = total_satisfied_pickups - satisfied_dropoffs.sum()
-                if remainder > 0:
-                    fractional_parts = (
-                        dropoff_proportions * total_satisfied_pickups
-                    ) - satisfied_dropoffs
-                    top_zones = np.argsort(fractional_parts)[-remainder:]
-                    satisfied_dropoffs[top_zones] += 1
+            remainder = total_satisfied_pickups - satisfied_dropoffs.sum()
+            if remainder > 0:
+                fractional_parts = (
+                    dropoff_proportions * total_satisfied_pickups
+                ) - satisfied_dropoffs
+                top_zones = np.argsort(fractional_parts)[-remainder:]
+                satisfied_dropoffs[top_zones] += 1
 
-                new_vehicle_counts += satisfied_dropoffs
+            new_vehicle_counts += satisfied_dropoffs
+
+        assert (
+            new_vehicle_counts.sum() == fleet_size
+        ), "Vehicle counts do not match the total fleet size after update."
 
         return new_vehicle_counts, total_satisfied_demand
 
-    def render(self, mode="human"):
+    def render(self):
         """Renders the current environment state."""
         print(
             f"Step: {self.current_step}, Time: {self.current_time}, Community: {self.active_community_id}"

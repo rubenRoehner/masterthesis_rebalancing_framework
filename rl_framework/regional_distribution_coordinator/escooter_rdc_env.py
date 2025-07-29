@@ -261,6 +261,205 @@ class EscooterRDCEnv(gym.Env):
         zone_community_map: pd.DataFrame,
         zone_index_map: dict[str, int],
     ) -> tuple[int, np.ndarray]:
+        """
+        Handles vehicle rebalancing with a new proportional allocation strategy
+        to improve the Gini Index.
+
+        This method removes vehicles from zones that are proportionally above the
+        community average and adds them to zones that are proportionally below it,
+        leading to a smoother and more balanced vehicle distribution.
+        """
+        fleet_size = current_vehicle_counts.sum()
+        temp_vehicle_counts = current_vehicle_counts.copy()
+        total_vehicles_rebalanced = 0
+
+        add_requests = {i: val for i, val in enumerate(actions) if val > 0}
+        remove_requests = {i: -val for i, val in enumerate(actions) if val < 0}
+
+        total_to_remove = sum(remove_requests.values())
+        total_to_add = sum(add_requests.values())
+
+        if total_to_add == 0 or total_to_remove == 0:
+            return 0, temp_vehicle_counts
+
+        vehicles_to_move = min(total_to_add, total_to_remove)
+        vehicle_pool = 0
+
+        if total_to_remove > 0:
+            removal_contribution_ratio = {
+                idx: val / total_to_remove for idx, val in remove_requests.items()
+            }
+            for comm_idx, num_to_remove in remove_requests.items():
+                community_id = [
+                    cid for cid, cidx in community_index_map.items() if cidx == comm_idx
+                ][0]
+                zones_in_community = (
+                    zone_community_map[
+                        zone_community_map["community_index"] == community_id
+                    ]["grid_index"]
+                    .map(zone_index_map)
+                    .tolist()
+                )
+
+                vehicles_to_take_from_comm = int(
+                    vehicles_to_move * removal_contribution_ratio[comm_idx]
+                )
+
+                comm_vehicle_counts = temp_vehicle_counts[zones_in_community]
+
+                mean_vehicles = comm_vehicle_counts.mean()
+                over_supplied_zones_idx = [
+                    z
+                    for z in zones_in_community
+                    if temp_vehicle_counts[z] > mean_vehicles
+                ]
+
+                if not over_supplied_zones_idx:
+                    over_supplied_zones_idx = sorted(
+                        zones_in_community,
+                        key=lambda z: temp_vehicle_counts[z],
+                        reverse=True,
+                    )
+
+                excess_vehicles = {
+                    z: temp_vehicle_counts[z] - mean_vehicles
+                    for z in over_supplied_zones_idx
+                }
+                total_excess = sum(excess_vehicles.values())
+
+                if total_excess > 0 and vehicles_to_take_from_comm > 0:
+                    # Track actual vehicles removed to ensure exact accounting
+                    vehicles_actually_removed = 0
+                    zone_removals = []
+
+                    for zone_idx, excess in excess_vehicles.items():
+                        proportion = excess / total_excess
+                        num_to_take = min(
+                            int(round(vehicles_to_take_from_comm * proportion)),
+                            temp_vehicle_counts[zone_idx],
+                        )
+                        zone_removals.append((zone_idx, num_to_take))
+                        vehicles_actually_removed += num_to_take
+
+                    # Adjust for rounding errors - distribute any shortfall or excess
+                    difference = vehicles_to_take_from_comm - vehicles_actually_removed
+                    i = 0
+                    while difference != 0 and i < len(zone_removals):
+                        zone_idx, current_removal = zone_removals[i]
+                        if (
+                            difference > 0
+                            and temp_vehicle_counts[zone_idx] > current_removal
+                        ):
+                            # Need to remove more, and this zone can give more
+                            zone_removals[i] = (zone_idx, current_removal + 1)
+                            difference -= 1
+                        elif difference < 0 and current_removal > 0:
+                            # Need to remove less
+                            zone_removals[i] = (zone_idx, current_removal - 1)
+                            difference += 1
+                        i += 1
+
+                    # Apply the removals
+                    for zone_idx, num_to_take in zone_removals:
+                        temp_vehicle_counts[zone_idx] -= num_to_take
+                        vehicle_pool += num_to_take
+
+        total_vehicles_rebalanced = vehicle_pool
+
+        if vehicle_pool > 0 and total_to_add > 0:
+            add_needs_ratio = {
+                idx: val / total_to_add for idx, val in add_requests.items()
+            }
+            vehicles_distributed = 0
+
+            for comm_idx, num_to_add in add_requests.items():
+                community_id = [
+                    cid for cid, cidx in community_index_map.items() if cidx == comm_idx
+                ][0]
+                zones_in_community = (
+                    zone_community_map[
+                        zone_community_map["community_index"] == community_id
+                    ]["grid_index"]
+                    .map(zone_index_map)
+                    .tolist()
+                )
+
+                vehicles_to_give_to_comm = int(vehicle_pool * add_needs_ratio[comm_idx])
+
+                comm_vehicle_counts = temp_vehicle_counts[zones_in_community]
+
+                mean_vehicles = comm_vehicle_counts.mean()
+                under_supplied_zones_idx = [
+                    z
+                    for z in zones_in_community
+                    if temp_vehicle_counts[z] < mean_vehicles
+                ]
+
+                if not under_supplied_zones_idx:
+                    under_supplied_zones_idx = sorted(
+                        zones_in_community, key=lambda z: temp_vehicle_counts[z]
+                    )
+
+                deficit_vehicles = {
+                    z: mean_vehicles - temp_vehicle_counts[z]
+                    for z in under_supplied_zones_idx
+                }
+                total_deficit = sum(deficit_vehicles.values())
+
+                if total_deficit > 0 and vehicles_to_give_to_comm > 0:
+                    # Track actual vehicles distributed
+                    zone_additions = []
+
+                    for zone_idx, deficit in deficit_vehicles.items():
+                        proportion = deficit / total_deficit
+                        num_to_give = int(round(vehicles_to_give_to_comm * proportion))
+                        zone_additions.append((zone_idx, num_to_give))
+
+                    # Apply the additions
+                    for zone_idx, num_to_give in zone_additions:
+                        temp_vehicle_counts[zone_idx] += num_to_give
+                        vehicles_distributed += num_to_give
+
+            # Handle any remaining vehicles due to rounding in community allocations
+            remaining_vehicles = vehicle_pool - vehicles_distributed
+            if remaining_vehicles != 0:
+                # Find zones that can accept/give vehicles to balance
+                if remaining_vehicles > 0:
+                    # Distribute remaining vehicles to zones with lowest counts
+                    sorted_zones = sorted(
+                        range(len(temp_vehicle_counts)),
+                        key=lambda i: temp_vehicle_counts[i],
+                    )
+                    for i in range(remaining_vehicles):
+                        zone_idx = sorted_zones[i % len(sorted_zones)]
+                        temp_vehicle_counts[zone_idx] += 1
+                else:
+                    # Remove excess vehicles from zones with highest counts
+                    sorted_zones = sorted(
+                        range(len(temp_vehicle_counts)),
+                        key=lambda i: temp_vehicle_counts[i],
+                        reverse=True,
+                    )
+                    for i in range(-remaining_vehicles):
+                        zone_idx = sorted_zones[i % len(sorted_zones)]
+                        if temp_vehicle_counts[zone_idx] > 0:
+                            temp_vehicle_counts[zone_idx] -= 1
+
+        assert (
+            temp_vehicle_counts.sum() == fleet_size
+        ), f"Vehicle counts do not match the total fleet size after rebalancing. Current: {temp_vehicle_counts.sum()}, Expected: {fleet_size}"
+
+        return total_vehicles_rebalanced, temp_vehicle_counts
+
+    '''
+    @staticmethod
+    def handle_rebalancing(
+        actions: list[int],
+        current_vehicle_counts: np.ndarray,
+        community_index_map: dict[str, int],
+        zone_community_map: pd.DataFrame,
+        zone_index_map: dict[str, int],
+    ) -> tuple[int, np.ndarray]:
         """Handle vehicle rebalancing actions across communities.
 
         Args:
@@ -368,6 +567,7 @@ class EscooterRDCEnv(gym.Env):
                     vehicles_added_count += 1
 
         return total_vehicles_rebalanced, temp_vehicle_counts
+    '''
 
     def simulate_demand(self, current_time: datetime) -> float:
         """Simulate pickup and dropoff demand for the current time step.
@@ -381,6 +581,8 @@ class EscooterRDCEnv(gym.Env):
         Raises:
             None
         """
+        fleet_size = self.current_vehicle_counts.sum()
+
         total_satisfied_demand = 0
         pickup_demand = self.pickup_demand_provider.get_demand_per_zone(
             time_of_day=current_time.hour,
@@ -392,6 +594,23 @@ class EscooterRDCEnv(gym.Env):
             day=current_time.day,
             month=current_time.month,
         )
+
+        pickup_total = pickup_demand.sum()
+        dropoff_total = dropoff_demand.sum()
+
+        if pickup_total != dropoff_total:
+            diff = int(abs(pickup_total - dropoff_total))
+
+            if pickup_total < dropoff_total:
+                indices = np.random.choice(self.n_zones, size=diff, replace=True)
+                pickup_demand = pickup_demand.copy()
+                for idx in indices:
+                    pickup_demand[idx] += 1
+            else:
+                indices = np.random.choice(self.n_zones, size=diff, replace=True)
+                dropoff_demand = dropoff_demand.copy()
+                for idx in indices:
+                    dropoff_demand[idx] += 1
 
         satisfied_pickups = np.zeros(self.n_zones, dtype=int)
         for i in range(self.n_zones):
@@ -420,6 +639,10 @@ class EscooterRDCEnv(gym.Env):
         satisfied_demand_ratio = (
             total_satisfied_demand / offered_demand if offered_demand > 0 else 1.0
         )
+
+        assert (
+            self.current_vehicle_counts.sum() == fleet_size
+        ), "Vehicle counts do not match the total fleet size after demand simulation."
         return satisfied_demand_ratio
 
     def step(self, action: List[int]) -> tuple[torch.Tensor, float, bool, bool, dict]:
@@ -446,6 +669,14 @@ class EscooterRDCEnv(gym.Env):
             )
         )
 
+        assert (
+            total_vehicles_rebalanced >= 0
+        ), "Total vehicles rebalanced cannot be negative!"
+
+        assert (
+            self.current_vehicle_counts.sum() == self.fleet_size
+        ), f"Vehicle counts do not match the total fleet size after rebalancing. Current: {self.current_vehicle_counts.sum()}, Expected: {self.fleet_size}"
+
         satisfied_demand_ratio = self.simulate_demand(
             current_time=self.calculate_current_time()
         )
@@ -453,7 +684,9 @@ class EscooterRDCEnv(gym.Env):
         reward = self.calculate_reward(
             satisfied_demand_ratio=satisfied_demand_ratio,
             total_vehicles_rebalanced=total_vehicles_rebalanced,
-            gini_coefficient=EscooterRDCEnv.calculate_gini_coefficient(self.current_vehicle_counts.copy()),
+            gini_coefficient=EscooterRDCEnv.calculate_gini_coefficient(
+                self.current_vehicle_counts.copy()
+            ),
         )
 
         self.current_step += 1
@@ -467,8 +700,16 @@ class EscooterRDCEnv(gym.Env):
             self.current_vehicle_counts >= 0
         ), "Negative scooter count detected!"
 
+        assert (
+            self.current_vehicle_counts.sum() == self.fleet_size
+        ), f"Vehicle counts do not match the total fleet size after demand simulation. Current: {self.current_vehicle_counts.sum()}, Expected: {self.fleet_size}"
+
         info = {
             "total_vehicles_rebalanced": total_vehicles_rebalanced,
+            "satisfied_demand_ratio": satisfied_demand_ratio,
+            "gini_coefficient": EscooterRDCEnv.calculate_gini_coefficient(
+                self.current_vehicle_counts.copy()
+            ),
         }
 
         return next_observation, reward, terminated, truncated, info
