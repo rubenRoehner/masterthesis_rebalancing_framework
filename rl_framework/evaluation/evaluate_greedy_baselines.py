@@ -236,6 +236,7 @@ def run_greedy_evaluation() -> None:
         )
 
         config_results = evaluator.evaluate()
+        config_results["fleet_size"] = config["fleet_size"]
         results[config["name"]] = config_results
 
         print(f"\nResults for {config['name']}:")
@@ -244,19 +245,20 @@ def run_greedy_evaluation() -> None:
 
     # Print summary comparison
     print(f"\n{'='*80}")
-    print("SUMMARY COMPARISON")
+    print("GREEDY BASELINES - SUMMARY COMPARISON")
     print(f"{'='*80}")
     print(
-        f"{'Configuration':<20} {'Mean Satisfied':<15} {'Manual Rebal':<15} {'Incentive Rebal':<18} {'Fleet Size':<10}"
+        f"{'Configuration':<20} {'Mean Satisfied':<15} {'Manual Rebal':<15} {'Incentive Rebal':<18} {'Gini Index':<10} {'Fleet Size':<10}"
     )
     print(f"{'-'*80}")
 
     for config_name, config_results in results.items():
         print(
             f"{config_name:<20} "
-            f"{config_results['mean_satisfied_ratio']:<15.4f} "
-            f"{config_results['mean_rebalanced_vehicles_manually']:<15.1f} "
-            f"{config_results['mean_rebalanced_vehicles_incentives']:<18.1f}"
+            f"{config_results['mean_satisfied_ratio']:<15.4f}"
+            f"{config_results['mean_rebalanced_vehicles_manually']:<15.4f}"
+            f"{config_results['mean_rebalanced_vehicles_incentives']:<18.4f}"
+            f"{config_results['mean_gini_index']:<10.4f}"
             f"{config_results['fleet_size']:<10d}"
         )
 

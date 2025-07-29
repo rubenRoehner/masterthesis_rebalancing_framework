@@ -37,18 +37,21 @@ START_TIME = datetime(2025, 5, 18, 15, 0)
 END_TIME = datetime(2025, 6, 18, 15, 0)
 STEP_DURATION = 60
 MAX_STEPS = 400
-RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250713-220126.pth"
-# RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250703-173727.pth"
+
+# RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250729-090240.pth"
+# RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250729-105454.pth"
+RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250729-110324.pth"
+
 UIC_AGENT_PATHS = [
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa44fffffff_uic_model_20250718-001849.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa637ffffff_uic_model_20250718-002743.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa707ffffff_uic_model_20250718-001551.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa717ffffff_uic_model_20250718-060021.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa71fffffff_uic_model_20250718-060558.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa787ffffff_uic_model_20250718-062053.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa78fffffff_uic_model_20250718-114329.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa7a7ffffff_uic_model_20250718-114543.zip",
-    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa7afffffff_uic_model_20250718-121240.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa44fffffff_uic_model_20250724-100743.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa637ffffff_uic_model_20250724-100933.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa707ffffff_uic_model_20250724-100826.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa717ffffff_uic_model_20250724-104026.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa71fffffff_uic_model_20250724-104108.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa787ffffff_uic_model_20250724-104220.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa78fffffff_uic_model_20250724-111143.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa7a7ffffff_uic_model_20250724-111207.zip",
+    "/home/ruroit00/rebalancing_framework/rl_framework/runs/UIC/outputs/861faa7afffffff_uic_model_20250724-111435.zip",
 ]
 
 CONFIGURATIONS = [
@@ -71,12 +74,6 @@ CONFIGURATIONS = [
         "fleet_size": 900,
     },
     {
-        "manual": False,
-        "incentive": False,
-        "name": "HRL_No_Rebalancing_900",
-        "fleet_size": 900,
-    },
-    {
         "manual": True,
         "incentive": True,
         "name": "HRL_Both_Enabled_600",
@@ -95,12 +92,6 @@ CONFIGURATIONS = [
         "fleet_size": 600,
     },
     {
-        "manual": False,
-        "incentive": False,
-        "name": "HRL_No_Rebalancing_600",
-        "fleet_size": 600,
-    },
-    {
         "manual": True,
         "incentive": True,
         "name": "HRL_Both_Enabled_1200",
@@ -116,12 +107,6 @@ CONFIGURATIONS = [
         "manual": False,
         "incentive": True,
         "name": "HRL_Incentive_Only_1200",
-        "fleet_size": 1200,
-    },
-    {
-        "manual": False,
-        "incentive": False,
-        "name": "HRL_No_Rebalancing_1200",
         "fleet_size": 1200,
     },
 ]
@@ -272,10 +257,10 @@ def run_evaluation() -> None:
     for config_name, config_results in results_summary.items():
         print(
             f"{config_name:<25} "
-            f"{config_results['mean_satisfied_ratio']:<15.4f} "
-            f"{config_results['mean_rebalanced_vehicles_manually']:<15.1f} "
-            f"{config_results['mean_rebalanced_vehicles_incentives']:<18.1f}"
-            f"{config_results['mean_gini_index']:<15.4f} "
+            f"{config_results['mean_satisfied_ratio']:<15.4f}"
+            f"{config_results['mean_rebalanced_vehicles_manually']:<15.4f}"
+            f"{config_results['mean_rebalanced_vehicles_incentives']:<18.4f}"
+            f"{config_results['mean_gini_index']:<15.4f}"
             f"{config_results['fleet_size']:<10d}"
         )
 

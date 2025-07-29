@@ -394,6 +394,10 @@ class HRLFrameworkEvaluator:
                 else:
                     satisfied_ratio_global = 1.0
 
+                assert (
+                    self.global_vehicle_counts.sum() == self.fleet_size
+                ), "Vehicle counts do not match the total fleet size after demand simulation."
+
                 satisfied_ratio.append(satisfied_ratio_global)
                 self.current_step += 1
                 self.current_time += self.step_duration
