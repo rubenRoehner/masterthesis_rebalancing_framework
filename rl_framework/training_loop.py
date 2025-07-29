@@ -47,35 +47,36 @@ ZONE_INDEX_MAP: dict[str, int] = {}
 for i, row in ZONE_COMMUNITY_MAP.iterrows():
     ZONE_INDEX_MAP.update({row["grid_index"]: i})
 
-RDC_ACTION_VALUES = [-15, -10, -5, 0, 5, 10, 15]
+# RDC_ACTION_VALUES = [-15, -10, -5, 0, 5, 10, 15]
+RDC_ACTION_VALUES = [-8, -4, -2, 0, 2, 4, 8]
 RDC_FEATURES_PER_COMMUNITY = (
     3  # forecast for pickup, forecast for dropoff, and current vehicle counts
 )
 
-RDC_REPLAY_BUFFER_CAPACITY = 3_000
-RDC_REPLAY_BUFFER_ALPHA = 0.79
+RDC_REPLAY_BUFFER_CAPACITY = 60_000
+RDC_REPLAY_BUFFER_ALPHA = 0.4
 RDC_REPLAY_BUFFER_BETA_START = 0.41
-RDC_REPLAY_BUFFER_BETA_FRAMES = 30_000
+RDC_REPLAY_BUFFER_BETA_FRAMES = 300_000
 
-RDC_BATCH_SIZE = 128
+RDC_BATCH_SIZE = 256
 RDC_HIDDEN_DIM = 256
 
-RDC_LR = 5.090778726259527e-07
+RDC_LR = 1e-4
 RDC_LR_STEP_SIZE = 2100
 RDC_LR_GAMMA = 0.942
-RDC_GAMMA = 0.979
+RDC_GAMMA = 0.99
 
 RDC_EPSILON_START = 1.0
-RDC_EPSILON_END = 0.051
-RDC_EPSILON_DECAY = 0.998
+RDC_EPSILON_END = 0.10
+RDC_EPSILON_DECAY = 0.99998
 
-RDC_TAU = 0.0095
+RDC_TAU = 0.005
 
 RDC_STEP_DURATION = 60  # in minutes
 
-RDC_REWARD_WEIGHT_DEMAND = 10.0
-RDC_REWARD_WEIGHT_REBALANCING = 1.0
-RDC_REWARD_WEIGHT_GINI = 0.0
+RDC_REWARD_WEIGHT_DEMAND = 7.0
+RDC_REWARD_WEIGHT_REBALANCING = 0.2
+RDC_REWARD_WEIGHT_GINI = 7.0
 
 DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
 PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
@@ -223,6 +224,8 @@ def main() -> None:
         num_training_steps = 0
 
         episode_vehicles_rebalanced = 0
+        episode_satisfied_demand_ratio = []
+        episode_gini_coefficients = []
         actions_this_episode = []
 
         for step in range(MAX_STEPS_PER_EPISODE):
@@ -251,6 +254,8 @@ def main() -> None:
             total_episode_reward += reward
 
             episode_vehicles_rebalanced += info["total_vehicles_rebalanced"]
+            episode_satisfied_demand_ratio.append(info["satisfied_demand_ratio"])
+            episode_gini_coefficients.append(info["gini_coefficient"])
             global_step += 1
             if done:
                 break
@@ -267,6 +272,16 @@ def main() -> None:
         # Log  vehicles rebalanced
         writer.add_scalar(
             "VehiclesReBalanced/Episode", episode_vehicles_rebalanced, episode
+        )
+        writer.add_scalar(
+            "SatisfiedDemandRatio/Episode",
+            np.mean(episode_satisfied_demand_ratio),
+            episode,
+        )
+        writer.add_scalar(
+            "GiniCoefficient/Episode",
+            np.mean(episode_gini_coefficients),
+            episode,
         )
 
         # Log actions per head as histogram

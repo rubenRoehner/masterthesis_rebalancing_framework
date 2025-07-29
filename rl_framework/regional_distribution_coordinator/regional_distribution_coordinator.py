@@ -137,7 +137,7 @@ class RegionalDistributionCoordinator:
         Raises:
             None
         """
-        state_tensor = state.unsqueeze(0)
+        state_tensor = state.unsqueeze(0).to(self.device)
 
         if torch.rand(1).item() < self.epsilon:
             action_indices = torch.randint(
@@ -342,7 +342,7 @@ class RegionalDistributionCoordinator:
         )  # [batch_size, num_communities]
 
         td_for_priorities = (
-            td_per_head.max(dim=1)[0].detach().cpu().numpy()
+            td_per_head.mean(dim=1).detach().cpu().numpy()
         )  # [batch_size]
 
         self.replay_buffer.update_priorities(indices, td_for_priorities)
