@@ -202,7 +202,7 @@ class EscooterUICEnv(gym.Env):
             zone_neighbor_map=local_zone_neighbor_map,
             user_willingness_fn=self.user_willingness_fn,
         )
-        new_local_counts, satisfied_demand = self.update_vehicle_counts(
+        new_local_counts, satisfied_demand, offered_demand = self.update_vehicle_counts(
             n_zones=self.n_zones_local,
             pickup_demand=pickup_demand,
             dropoff_demand=dropoff_demand,
@@ -213,7 +213,7 @@ class EscooterUICEnv(gym.Env):
 
         gini_coefficient = self.calculate_gini_coefficient(new_local_counts)
         reward = self.calculate_reward(
-            satisfied_demand, pickup_demand.sum(), vehicles_rebalanced, gini_coefficient
+            satisfied_demand, offered_demand, vehicles_rebalanced, gini_coefficient
         )
 
         self.current_step += 1
@@ -398,7 +398,7 @@ class EscooterUICEnv(gym.Env):
         pickup_demand: np.ndarray,
         dropoff_demand: np.ndarray,
         current_vehicle_counts: np.ndarray,
-    ) -> tuple[np.ndarray, int]:
+    ) -> tuple[np.ndarray, int, int]:
         """Updates vehicle counts based on pickup and dropoff demand."""
         fleet_size = current_vehicle_counts.sum()
 
@@ -449,7 +449,9 @@ class EscooterUICEnv(gym.Env):
             new_vehicle_counts.sum() == fleet_size
         ), "Vehicle counts do not match the total fleet size after update."
 
-        return new_vehicle_counts, total_satisfied_demand
+        total_offered_demand = max(pickup_demand.sum(), dropoff_demand.sum())
+
+        return new_vehicle_counts, total_satisfied_demand, total_offered_demand
 
     def render(self):
         """Renders the current environment state."""

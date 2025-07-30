@@ -328,7 +328,6 @@ class EscooterRDCEnv(gym.Env):
                 total_excess = sum(excess_vehicles.values())
 
                 if total_excess > 0 and vehicles_to_take_from_comm > 0:
-                    # Track actual vehicles removed to ensure exact accounting
                     vehicles_actually_removed = 0
                     zone_removals = []
 
@@ -341,7 +340,6 @@ class EscooterRDCEnv(gym.Env):
                         zone_removals.append((zone_idx, num_to_take))
                         vehicles_actually_removed += num_to_take
 
-                    # Adjust for rounding errors - distribute any shortfall or excess
                     difference = vehicles_to_take_from_comm - vehicles_actually_removed
                     i = 0
                     while difference != 0 and i < len(zone_removals):
@@ -350,16 +348,13 @@ class EscooterRDCEnv(gym.Env):
                             difference > 0
                             and temp_vehicle_counts[zone_idx] > current_removal
                         ):
-                            # Need to remove more, and this zone can give more
                             zone_removals[i] = (zone_idx, current_removal + 1)
                             difference -= 1
                         elif difference < 0 and current_removal > 0:
-                            # Need to remove less
                             zone_removals[i] = (zone_idx, current_removal - 1)
                             difference += 1
                         i += 1
 
-                    # Apply the removals
                     for zone_idx, num_to_take in zone_removals:
                         temp_vehicle_counts[zone_idx] -= num_to_take
                         vehicle_pool += num_to_take
@@ -415,17 +410,13 @@ class EscooterRDCEnv(gym.Env):
                         num_to_give = int(round(vehicles_to_give_to_comm * proportion))
                         zone_additions.append((zone_idx, num_to_give))
 
-                    # Apply the additions
                     for zone_idx, num_to_give in zone_additions:
                         temp_vehicle_counts[zone_idx] += num_to_give
                         vehicles_distributed += num_to_give
 
-            # Handle any remaining vehicles due to rounding in community allocations
             remaining_vehicles = vehicle_pool - vehicles_distributed
             if remaining_vehicles != 0:
-                # Find zones that can accept/give vehicles to balance
                 if remaining_vehicles > 0:
-                    # Distribute remaining vehicles to zones with lowest counts
                     sorted_zones = sorted(
                         range(len(temp_vehicle_counts)),
                         key=lambda i: temp_vehicle_counts[i],
@@ -434,7 +425,6 @@ class EscooterRDCEnv(gym.Env):
                         zone_idx = sorted_zones[i % len(sorted_zones)]
                         temp_vehicle_counts[zone_idx] += 1
                 else:
-                    # Remove excess vehicles from zones with highest counts
                     sorted_zones = sorted(
                         range(len(temp_vehicle_counts)),
                         key=lambda i: temp_vehicle_counts[i],
@@ -450,124 +440,6 @@ class EscooterRDCEnv(gym.Env):
         ), f"Vehicle counts do not match the total fleet size after rebalancing. Current: {temp_vehicle_counts.sum()}, Expected: {fleet_size}"
 
         return total_vehicles_rebalanced, temp_vehicle_counts
-
-    '''
-    @staticmethod
-    def handle_rebalancing(
-        actions: list[int],
-        current_vehicle_counts: np.ndarray,
-        community_index_map: dict[str, int],
-        zone_community_map: pd.DataFrame,
-        zone_index_map: dict[str, int],
-    ) -> tuple[int, np.ndarray]:
-        """Handle vehicle rebalancing actions across communities.
-
-        Args:
-            actions: list of rebalancing actions for each community
-            current_vehicle_counts: current vehicle counts per zone
-            community_index_map: mapping from community IDs to indices
-            zone_community_map: DataFrame mapping zones to communities
-            zone_index_map: mapping from zone IDs to indices
-
-        Returns:
-            tuple: (total_vehicles_rebalanced, updated_vehicle_counts)
-
-        Raises:
-            None
-        """
-        temp_vehicle_counts = current_vehicle_counts.copy()
-
-        add_requests = {i: val for i, val in enumerate(actions) if val > 0}
-        remove_requests = {i: val for i, val in enumerate(actions) if val < 0}
-
-        total_add_requested = sum(add_requests.values())
-        total_remove_requested = -sum(remove_requests.values())
-
-        if total_add_requested == 0 or total_remove_requested == 0:
-            return 0, temp_vehicle_counts
-
-        if total_add_requested > total_remove_requested:
-            scale_factor = total_remove_requested / total_add_requested
-            for i in add_requests:
-                add_requests[i] = int(add_requests[i] * scale_factor)
-        elif total_remove_requested > total_add_requested:
-            scale_factor = total_add_requested / total_remove_requested
-            for i in remove_requests:
-                remove_requests[i] = int(remove_requests[i] * scale_factor)
-
-        total_to_add = sum(add_requests.values())
-        total_to_remove = -sum(remove_requests.values())
-        vehicles_to_move = min(total_to_add, total_to_remove)
-
-        if vehicles_to_move == 0:
-            return 0, temp_vehicle_counts
-
-        vehicle_pool = 0
-        vehicles_removed_count = 0
-
-        for community_index, allocation in remove_requests.items():
-            community_id = [
-                cid
-                for cid, cidx in community_index_map.items()
-                if cidx == community_index
-            ][0]
-            zones_in_community = (
-                zone_community_map[
-                    zone_community_map["community_index"] == community_id
-                ]["grid_index"]
-                .map(zone_index_map)
-                .tolist()
-            )
-
-            vehicles_to_remove_from_comm = min(
-                -allocation, vehicles_to_move - vehicles_removed_count
-            )
-
-            for _ in range(vehicles_to_remove_from_comm):
-                fullest_zones = sorted(
-                    zones_in_community,
-                    key=lambda z: temp_vehicle_counts[z],
-                    reverse=True,
-                )
-                for zone_idx in fullest_zones:
-                    if temp_vehicle_counts[zone_idx] > 0:
-                        temp_vehicle_counts[zone_idx] -= 1
-                        vehicle_pool += 1
-                        vehicles_removed_count += 1
-                        break
-
-        total_vehicles_rebalanced = vehicle_pool
-
-        vehicles_added_count = 0
-        for community_index, allocation in add_requests.items():
-            community_id = [
-                cid
-                for cid, cidx in community_index_map.items()
-                if cidx == community_index
-            ][0]
-            zones_in_community = (
-                zone_community_map[
-                    zone_community_map["community_index"] == community_id
-                ]["grid_index"]
-                .map(zone_index_map)
-                .tolist()
-            )
-
-            vehicles_to_add_to_comm = min(
-                allocation, vehicle_pool - vehicles_added_count
-            )
-
-            for _ in range(vehicles_to_add_to_comm):
-                if vehicle_pool > 0:
-                    emptiest_zone = min(
-                        zones_in_community, key=lambda z: temp_vehicle_counts[z]
-                    )
-                    temp_vehicle_counts[emptiest_zone] += 1
-                    vehicle_pool -= 1
-                    vehicles_added_count += 1
-
-        return total_vehicles_rebalanced, temp_vehicle_counts
-    '''
 
     def simulate_demand(self, current_time: datetime) -> float:
         """Simulate pickup and dropoff demand for the current time step.

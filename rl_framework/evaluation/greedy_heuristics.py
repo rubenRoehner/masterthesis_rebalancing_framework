@@ -472,7 +472,7 @@ class GreedyHeuristicEvaluator:
                     else:
                         vehicles_rebalanced_uic[community_index] = 0
 
-                    local_vehicle_counts, total_satisfied_demand = (
+                    local_vehicle_counts, total_satisfied_demand, offered_demand = (
                         EscooterUICEnv.update_vehicle_counts(
                             n_zones=len(local_vehicle_counts),
                             pickup_demand=local_pickup_demand,
