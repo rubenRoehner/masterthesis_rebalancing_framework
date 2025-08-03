@@ -22,8 +22,7 @@ from demand_forecasting.IrConv_LSTM_pre_forecaster import (
 from demand_provider.demand_provider_impl import DemandProviderImpl
 
 torch.cuda.set_device(3)
-# global parameters
-# Mean in GBFS data is around 900 scooters
+
 FLEET_SIZE = 810
 NUM_EPISODES = 10_000
 MAX_STEPS_PER_EPISODE = 100
@@ -47,32 +46,31 @@ ZONE_INDEX_MAP: dict[str, int] = {}
 for i, row in ZONE_COMMUNITY_MAP.iterrows():
     ZONE_INDEX_MAP.update({row["grid_index"]: i})
 
-# RDC_ACTION_VALUES = [-15, -10, -5, 0, 5, 10, 15]
 RDC_ACTION_VALUES = [-8, -4, -2, 0, 2, 4, 8]
 RDC_FEATURES_PER_COMMUNITY = (
-    3  # forecast for pickup, forecast for dropoff, and current vehicle counts
+    3 
 )
 
-RDC_REPLAY_BUFFER_CAPACITY = 60_000
-RDC_REPLAY_BUFFER_ALPHA = 0.4
-RDC_REPLAY_BUFFER_BETA_START = 0.41
-RDC_REPLAY_BUFFER_BETA_FRAMES = 300_000
+RDC_REPLAY_BUFFER_CAPACITY = 13_000
+RDC_REPLAY_BUFFER_ALPHA = 1.0
+RDC_REPLAY_BUFFER_BETA_START = 0.25
+RDC_REPLAY_BUFFER_BETA_FRAMES = 400_000
 
-RDC_BATCH_SIZE = 256
-RDC_HIDDEN_DIM = 256
+RDC_BATCH_SIZE = 1024
+RDC_HIDDEN_DIM = 512
 
-RDC_LR = 1e-4
-RDC_LR_STEP_SIZE = 2100
-RDC_LR_GAMMA = 0.942
-RDC_GAMMA = 0.99
+RDC_LR = 1.1e-6
+RDC_LR_STEP_SIZE = 30_000
+RDC_LR_GAMMA = 0.9
+RDC_GAMMA = 0.978
 
 RDC_EPSILON_START = 1.0
-RDC_EPSILON_END = 0.10
-RDC_EPSILON_DECAY = 0.99998
+RDC_EPSILON_END = 0.07
+RDC_EPSILON_DECAY = 0.99997
 
-RDC_TAU = 0.005
+RDC_TAU = 0.0026
 
-RDC_STEP_DURATION = 60  # in minutes
+RDC_STEP_DURATION = 60
 
 RDC_REWARD_WEIGHT_DEMAND = 7.0
 RDC_REWARD_WEIGHT_REBALANCING = 0.2
@@ -181,9 +179,8 @@ def main() -> None:
         device=device,
     )
 
-    # Initialize TensorBoard writer
     writer = SummaryWriter(
-        f"rl_framework/runs/regional_distribution_coordinator_experiment_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        f"rl_framework/runs/RDC/regional_distribution_coordinator_experiment_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     )
 
     writer.add_hparams(
@@ -229,11 +226,9 @@ def main() -> None:
         actions_this_episode = []
 
         for step in range(MAX_STEPS_PER_EPISODE):
-            # Get action from the rdc agent
             action = rdc_agent.select_action(current_observation)
             actions_this_episode.append(action)
 
-            # Take action in the environment
             next_observation, reward, terminated, truncated, info = rdc_env.step(action)
             done = terminated or truncated
 
@@ -260,16 +255,17 @@ def main() -> None:
             if done:
                 break
 
-        # Log episode metrics
+        rdc_agent.update_epsilon()
+
         writer.add_scalar("Reward/Episode", total_episode_reward, episode)
         if num_training_steps > 0:
             writer.add_scalar(
                 "Loss/Episode_Avg", episode_loss / num_training_steps, episode
             )
-        # Log current epsilon
+
         writer.add_scalar("Epsilon/Episode", rdc_agent.epsilon, episode)
 
-        # Log  vehicles rebalanced
+
         writer.add_scalar(
             "VehiclesReBalanced/Episode", episode_vehicles_rebalanced, episode
         )
@@ -284,14 +280,12 @@ def main() -> None:
             episode,
         )
 
-        # Log actions per head as histogram
         actions_array = np.array(actions_this_episode, dtype=int)
         for head in range(N_COMMUNITIES):
             writer.add_histogram(
                 f"Action/Head{head}", actions_array[:, head], global_step=episode
             )
 
-        # log Buffer size
         writer.add_scalar("Buffer/Size", len(rdc_agent.replay_buffer), episode)
 
         print(
