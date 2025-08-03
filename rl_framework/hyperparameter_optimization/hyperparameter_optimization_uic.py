@@ -47,8 +47,8 @@ from stable_baselines3.common.callbacks import EvalCallback
 import csv
 import os
 
-OPTIMIZE_PPO_CORE = False
-OPTIMIZE_ARCHITECTURE = True
+OPTIMIZE_PPO_CORE = True
+OPTIMIZE_ARCHITECTURE = False
 OPTIMIZE_STABILITY = False
 
 FLAG_LABELS = {
@@ -96,19 +96,19 @@ REWARD_WEIGHT_GINI = 7.0
 
 UIC_POLICY = "MultiInputPolicy"
 
-UIC_LEARNING_RATE = 3e-05
-UIC_N_STEPS = 1024
-UIC_BATCH_SIZE = 64
-UIC_CLIP_RANGE = 0.2
-UIC_ENT_COEF = 0.002
-UIC_VF_COEF = 0.7
+UIC_LEARNING_RATE = 5.15e-06
+UIC_N_STEPS = 512
+UIC_BATCH_SIZE = 128
+UIC_CLIP_RANGE = 0.15
+UIC_ENT_COEF = 3.4e-05
+UIC_VF_COEF = 0.4
 
-UIC_GAMMA = 0.99
-UIC_GAE_LAMBDA = 0.95
-UIC_TARGET_KL = 0.012
+UIC_GAMMA = 0.95326
+UIC_GAE_LAMBDA = 0.96
+UIC_TARGET_KL = 0.02
 
 UIC_POLICY_KWARGS = {
-    "net_arch": dict(pi=[128, 128, 128], vf=[128, 128, 128]),
+    "net_arch": dict(pi=[256, 256, 256], vf=[256, 256, 256]),
     "activation_fn": torch.nn.ReLU,
 }
 
