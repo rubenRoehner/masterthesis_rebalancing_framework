@@ -379,8 +379,6 @@ class RegionalDistributionCoordinator:
         self.soft_update()
         self.train_step_counter += 1
 
-        self.update_epsilon()
-
         return loss.item(), td_per_head.detach()
 
     def set_evaluation_mode(self, state_dict) -> None:
