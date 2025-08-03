@@ -9,16 +9,16 @@ for the PPO-based User Incentive Coordinator agent in e-scooter rebalancing.
 import sys
 import os
 
-from rl_framework.regional_distribution_coordinator.regional_distribution_coordinator import (
-    RegionalDistributionCoordinator,
-)
-from training_loop import RDC_ACTION_VALUES, RDC_HIDDEN_DIM, RDC_FEATURES_PER_COMMUNITY
-
 # Add the parent directories to Python path
 sys.path.append(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from rl_framework.regional_distribution_coordinator.regional_distribution_coordinator import (
+    RegionalDistributionCoordinator,
+)
+from training_loop import RDC_ACTION_VALUES, RDC_HIDDEN_DIM, RDC_FEATURES_PER_COMMUNITY
 
 from datetime import datetime, timedelta
 import torch
@@ -47,16 +47,14 @@ from stable_baselines3.common.callbacks import EvalCallback
 import csv
 import os
 
-OPTIMIZE_PPO_CORE = True
+OPTIMIZE_PPO_CORE = False
 OPTIMIZE_ARCHITECTURE = True
-OPTIMIZE_STABILITY = True
-OPTIMIZE_REWARD_WEIGHTS = True
+OPTIMIZE_STABILITY = False
 
 FLAG_LABELS = {
     "OPTIMIZE_PPO_CORE": "ppo-core",
     "OPTIMIZE_ARCHITECTURE": "architecture",
     "OPTIMIZE_STABILITY": "stability",
-    "OPTIMIZE_REWARD_WEIGHTS": "rewardweights",
 }
 
 active_flags = [
@@ -74,88 +72,73 @@ timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 study_filename = f"uic_ho_{study_label}_{timestamp}"
 output_dir = "ho_results"
 os.makedirs(output_dir, exist_ok=True)
-N_TRIALS = 100
+N_TRIALS = 50
 
 # global parameters
 COMMUNITY_ID = "861faa7afffffff"
-FLEET_SIZE = 90
-N_EPOCHS = 20
+GLOBAL_FLEET_SIZE = 810
+N_EPOCHS = 15
 MAX_STEPS_PER_EPISODE = 256
-TOTAL_TIME_STEPS = 50_000
+TOTAL_TIME_STEPS = 40_000
 START_TIME = datetime(2025, 2, 11, 14, 0)
 END_TIME = datetime(2025, 5, 4, 15, 0)
 EVAL_END_TIME = datetime(2025, 5, 18, 15, 0)
 
-N_WORKERS = 1
+N_WORKERS = 2
 BASE_SEED = 42
 
 # UIC parameters
 UIC_STEP_DURATION = 60  # in minutes
 
-REWARD_WEIGHT_DEMAND = 1.0
-REWARD_WEIGHT_REBALANCING = 0.3
-REWARD_WEIGHT_GINI = 0.3
+REWARD_WEIGHT_DEMAND = 7.0
+REWARD_WEIGHT_REBALANCING = 0.2
+REWARD_WEIGHT_GINI = 7.0
 
 UIC_POLICY = "MultiInputPolicy"
 
-# {'learning_rate': 1.9533753916143637e-05, 'n_steps': 512, 'batch_size': 32, 'clip_range': 0.19, 'ent_coef': 0.00034931655259393753, 'vf_coef': 0.5}
-# {'learning_rate': 2.403268653036228e-06, 'n_steps': 512, 'batch_size': 32, 'clip_range': 0.23, 'ent_coef': 1.8983075157031546e-05, 'vf_coef': 0.36000000000000004}
 UIC_LEARNING_RATE = 3e-05
 UIC_N_STEPS = 1024
 UIC_BATCH_SIZE = 64
-UIC_CLIP_RANGE = 0.08
+UIC_CLIP_RANGE = 0.2
 UIC_ENT_COEF = 0.002
 UIC_VF_COEF = 0.7
 
-# {'gamma': 0.934, 'gae_lambda': 0.89, 'use_target_kl': None}
-# {'gamma': 0.932, 'gae_lambda': 0.954, 'use_target_kl': 0.022}
-UIC_GAMMA = 0.975
+UIC_GAMMA = 0.99
 UIC_GAE_LAMBDA = 0.95
 UIC_TARGET_KL = 0.012
 
-# {'n_layers': 3, 'hidden_size': 128, 'activation': 'ReLU'}
-# {'n_layers': 2, 'hidden_size': 64, 'activation': 'Tanh'}
 UIC_POLICY_KWARGS = {
-    "net_arch": dict(pi=[128, 128, 128], vf=[256, 128, 128]),
+    "net_arch": dict(pi=[128, 128, 128], vf=[128, 128, 128]),
     "activation_fn": torch.nn.ReLU,
 }
 
 UIC_VERBOSE = 1
 UIC_TENSORBOARD_LOG = "rl_framework/runs/"
 
-RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250723-110704.pth"
+RDC_AGENT_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/runs/outputs/rdc_agent_model_20250801-185856.pth"
 
 ZONE_COMMUNITY_MAP: pd.DataFrame = pd.read_pickle(
     "/home/ruroit00/rebalancing_framework/processed_data/grid_community_map.pickle"
 )
-
 NUM_COMMUNITIES = ZONE_COMMUNITY_MAP["community_index"].nunique()
 N_TOTAL_ZONES = ZONE_COMMUNITY_MAP.shape[0]
 
-ZONE_INDEX_MAP: dict[str, int] = {}
-for i, row in ZONE_COMMUNITY_MAP[
-    ZONE_COMMUNITY_MAP["community_index"] == COMMUNITY_ID
-].iterrows():
-    ZONE_INDEX_MAP.update({row["grid_index"]: i})
 
-COMMUNTIY_ZONE_IDS = set(ZONE_INDEX_MAP.keys())
+ZONE_INDEX_MAP: dict[str, int] = {}
+for i, row in ZONE_COMMUNITY_MAP.iterrows():
+    ZONE_INDEX_MAP.update({row["grid_index"]: i})
 
 ZONE_NEIGHBOR_MAP_DF: pd.DataFrame = pd.read_pickle(
     "/home/ruroit00/rebalancing_framework/processed_data/grid_cells_neighbors_list.pickle"
-)  # [zone_index, list of neighbors]
-
+)
 ZONE_NEIGHBOR_MAP: dict[str, list[str]] = {}
 for i, row in ZONE_NEIGHBOR_MAP_DF.iterrows():
-    if row["grid_index"] not in COMMUNTIY_ZONE_IDS:
-        continue
-    neighbors = [
-        neighbor for neighbor in row["neighbors"] if neighbor in COMMUNTIY_ZONE_IDS
-    ]
+    neighbors = [neighbor for neighbor in row["neighbors"]]
     ZONE_NEIGHBOR_MAP.update({row["grid_index"]: neighbors})
 
-N_ZONES = ZONE_COMMUNITY_MAP[
-    ZONE_COMMUNITY_MAP["community_index"] == COMMUNITY_ID
-].shape[0]
+COMMUNITY_INDEX_MAP: dict[str, int] = {}
+for index, value in enumerate(sorted(ZONE_COMMUNITY_MAP["community_index"].unique())):
+    COMMUNITY_INDEX_MAP.update({value: index})
 
 DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_dropoff_demand_h3_hourly.pickle"
 PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
@@ -243,7 +226,6 @@ def save_trial_callback(study: Study, trial: FrozenTrial) -> None:
 
 def make_env(
     rank: int,
-    n_zones: int,
     dropoff_demand_forecaster: DemandForecaster,
     pickup_demand_forecaster: DemandForecaster,
     dropoff_demand_provider: DemandProvider,
@@ -286,8 +268,7 @@ def make_env(
         rdc_agent_instance.set_evaluation_mode(rdc_network)
         env: gym.Env = EscooterUICEnv(
             community_id=COMMUNITY_ID,
-            n_zones=n_zones,
-            fleet_size=FLEET_SIZE,
+            fleet_size=GLOBAL_FLEET_SIZE,
             dropoff_demand_forecaster=dropoff_demand_forecaster,
             pickup_demand_forecaster=pickup_demand_forecaster,
             dropoff_demand_provider=dropoff_demand_provider,
@@ -297,12 +278,14 @@ def make_env(
             zone_index_map=zone_index_map,
             user_willingness_fn=USER_WILLINGNESS_FN,
             max_steps=MAX_STEPS_PER_EPISODE,
-            start_time=START_TIME + timedelta(minutes=rank * UIC_STEP_DURATION),
+            start_time=START_TIME,
             step_duration=timedelta(minutes=UIC_STEP_DURATION),
             reward_weight_demand=REWARD_WEIGHT_DEMAND,
             reward_weight_rebalancing=REWARD_WEIGHT_REBALANCING,
             reward_weight_gini=REWARD_WEIGHT_GINI,
             rdc_agent=rdc_agent_instance,
+            zone_community_map=ZONE_COMMUNITY_MAP,
+            community_index_map=COMMUNITY_INDEX_MAP,
         )
         env.reset(seed=seed + rank)
         env = Monitor(env)
@@ -327,12 +310,12 @@ def objective(trial: optuna.Trial) -> float:
         None
     """
     if OPTIMIZE_PPO_CORE:
-        learning_rate = trial.suggest_float("learning_rate", 5e-6, 1e-3, log=True)
-        n_steps = trial.suggest_categorical("n_steps", [512, 1024, 2048])
-        batch_size = trial.suggest_categorical("batch_size", [64, 128, 256])
-        clip_range = trial.suggest_float("clip_range", 0.05, 0.3, step=0.05)
-        ent_coef = trial.suggest_float("ent_coef", 1e-4, 5e-2, log=True)
-        vf_coef = trial.suggest_float("vf_coef", 0.3, 1, step=0.1)
+        learning_rate = trial.suggest_float("learning_rate", 5e-6, 5e-4, log=True)
+        n_steps = trial.suggest_categorical("n_steps", [256, 512, 1024, 2048])
+        batch_size = trial.suggest_categorical("batch_size", [32, 64, 128, 256])
+        clip_range = trial.suggest_float("clip_range", 0.1, 0.3, step=0.05)
+        ent_coef = trial.suggest_float("ent_coef", 1e-5, 1e-3, log=True)
+        vf_coef = trial.suggest_float("vf_coef", 0.4, 0.8, step=0.05)
     else:
         learning_rate = UIC_LEARNING_RATE
         n_steps = UIC_N_STEPS
@@ -367,11 +350,11 @@ def objective(trial: optuna.Trial) -> float:
         policy_kwargs = UIC_POLICY_KWARGS
 
     if OPTIMIZE_STABILITY:
-        gamma = trial.suggest_float("gamma", 0.90, 0.995, step=0.001)
-        gae_lambda = trial.suggest_float("gae_lambda", 0.8, 0.98, step=0.001)
+        gamma = trial.suggest_float("gamma", 0.95, 0.999, log=True)
+        gae_lambda = trial.suggest_float("gae_lambda", 0.90, 0.98, step=0.01)
 
         raw_target_kl = trial.suggest_categorical(
-            "use_target_kl", [None, 0.015, 0.02, 0.03]
+            "use_target_kl", [None, 0.01, 0.015, 0.02, 0.025]
         )
         if raw_target_kl is None:
             target_kl: float | None = None
@@ -382,25 +365,20 @@ def objective(trial: optuna.Trial) -> float:
         gae_lambda = UIC_GAE_LAMBDA
         target_kl = None
 
-    if OPTIMIZE_REWARD_WEIGHTS:
-        reward_weight_demand = trial.suggest_float(
-            "reward_weight_demand", 0.5, 1.0, step=0.1
-        )
-        reward_weight_rebalancing = trial.suggest_float(
-            "reward_weight_rebalancing", 0.8, 1.5, step=0.1
-        )
-        reward_weight_gini = trial.suggest_float(
-            "reward_weight_gini", 0.0, 0.2, step=0.01
-        )
-    else:
-        reward_weight_demand = REWARD_WEIGHT_DEMAND
-        reward_weight_rebalancing = REWARD_WEIGHT_REBALANCING
-        reward_weight_gini = REWARD_WEIGHT_GINI
+
+    rdc_agent_instance = RegionalDistributionCoordinator(
+        device=device,
+        hidden_dim=RDC_HIDDEN_DIM,
+        action_values=RDC_ACTION_VALUES,
+        num_communities=NUM_COMMUNITIES,
+        state_dim=NUM_COMMUNITIES * RDC_FEATURES_PER_COMMUNITY,
+    )
+    rdc_network = torch.load(RDC_AGENT_PATH, map_location=device)
+    rdc_agent_instance.set_evaluation_mode(rdc_network)
 
     escooter_env = EscooterUICEnv(
         community_id=COMMUNITY_ID,
-        n_zones=N_ZONES,
-        fleet_size=FLEET_SIZE,
+        fleet_size=GLOBAL_FLEET_SIZE,
         dropoff_demand_forecaster=dropoff_demand_forecaster,
         pickup_demand_forecaster=pickup_demand_forecaster,
         dropoff_demand_provider=eval_dropoff_demand_provider,
@@ -412,16 +390,18 @@ def objective(trial: optuna.Trial) -> float:
         max_steps=MAX_STEPS_PER_EPISODE,
         start_time=START_TIME,
         step_duration=timedelta(minutes=UIC_STEP_DURATION),
-        reward_weight_demand=reward_weight_demand,
-        reward_weight_rebalancing=reward_weight_rebalancing,
-        reward_weight_gini=reward_weight_gini,
+        reward_weight_demand=REWARD_WEIGHT_DEMAND,
+        reward_weight_rebalancing=REWARD_WEIGHT_REBALANCING,
+        reward_weight_gini=REWARD_WEIGHT_GINI,
+        rdc_agent=rdc_agent_instance,
+        zone_community_map=ZONE_COMMUNITY_MAP,
+        community_index_map=COMMUNITY_INDEX_MAP,
     )
 
     train_envs = SubprocVecEnv(
         [
             make_env(
                 rank=i,
-                n_zones=N_ZONES,
                 dropoff_demand_forecaster=dropoff_demand_forecaster,
                 pickup_demand_forecaster=pickup_demand_forecaster,
                 dropoff_demand_provider=dropoff_demand_provider,
@@ -461,6 +441,7 @@ def objective(trial: optuna.Trial) -> float:
         vf_coef=vf_coef,
         target_kl=target_kl,
         policy_kwargs=policy_kwargs,
+        device=device,
     )
 
     agent.train(
@@ -476,11 +457,16 @@ if __name__ == "__main__":
         direction="maximize",
         sampler=optuna.samplers.TPESampler(),
         study_name="escooter_uic_hyperparameter_optimization",
+        pruner=optuna.pruners.MedianPruner(
+            n_startup_trials=5,
+            n_warmup_steps=10,
+            interval_steps=5,
+        ),
     )
     study.optimize(
         objective,
         n_trials=N_TRIALS,
-        n_jobs=1,
+        n_jobs=2,
         callbacks=[save_trial_callback],
     )
 
