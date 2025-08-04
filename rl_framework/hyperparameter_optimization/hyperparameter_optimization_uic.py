@@ -48,8 +48,8 @@ import csv
 import os
 
 OPTIMIZE_PPO_CORE = True
-OPTIMIZE_ARCHITECTURE = False
-OPTIMIZE_STABILITY = False
+OPTIMIZE_ARCHITECTURE = True
+OPTIMIZE_STABILITY = True
 
 FLAG_LABELS = {
     "OPTIMIZE_PPO_CORE": "ppo-core",
@@ -72,7 +72,7 @@ timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 study_filename = f"uic_ho_{study_label}_{timestamp}"
 output_dir = "ho_results"
 os.makedirs(output_dir, exist_ok=True)
-N_TRIALS = 50
+N_TRIALS = 100
 
 # global parameters
 COMMUNITY_ID = "861faa7afffffff"
@@ -84,7 +84,7 @@ START_TIME = datetime(2025, 2, 11, 14, 0)
 END_TIME = datetime(2025, 5, 4, 15, 0)
 EVAL_END_TIME = datetime(2025, 5, 18, 15, 0)
 
-N_WORKERS = 2
+N_WORKERS = 6
 BASE_SEED = 42
 
 # UIC parameters
@@ -96,15 +96,15 @@ REWARD_WEIGHT_GINI = 7.0
 
 UIC_POLICY = "MultiInputPolicy"
 
-UIC_LEARNING_RATE = 5.15e-06
-UIC_N_STEPS = 512
-UIC_BATCH_SIZE = 128
-UIC_CLIP_RANGE = 0.15
-UIC_ENT_COEF = 3.4e-05
-UIC_VF_COEF = 0.4
+UIC_LEARNING_RATE = 3.9876e-05
+UIC_N_STEPS = 256
+UIC_BATCH_SIZE = 64
+UIC_CLIP_RANGE = 0.3
+UIC_ENT_COEF = 9.8e-05
+UIC_VF_COEF = 0.7
 
-UIC_GAMMA = 0.95326
-UIC_GAE_LAMBDA = 0.96
+UIC_GAMMA = 0.9638746
+UIC_GAE_LAMBDA = 0.97
 UIC_TARGET_KL = 0.02
 
 UIC_POLICY_KWARGS = {
@@ -196,7 +196,7 @@ eval_pickup_demand_provider = DemandProviderImpl(
     endTime=EVAL_END_TIME,
 )
 
-torch.cuda.set_device(2)
+torch.cuda.set_device(1)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -310,12 +310,12 @@ def objective(trial: optuna.Trial) -> float:
         None
     """
     if OPTIMIZE_PPO_CORE:
-        learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-4, log=True)
-        n_steps = trial.suggest_categorical("n_steps", [256, 512, 768])
-        batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
-        clip_range = trial.suggest_float("clip_range", 0.15, 0.3, step=0.05)
-        ent_coef = trial.suggest_float("ent_coef", 1e-5, 1e-4, log=True)
-        vf_coef = trial.suggest_float("vf_coef", 0.65, 0.85, step=0.05)
+        learning_rate = trial.suggest_float("learning_rate", 2e-5, 6e-5, log=True)
+        n_steps = trial.suggest_categorical("n_steps", [256, 512])
+        batch_size = trial.suggest_categorical("batch_size", [32, 64])
+        clip_range = trial.suggest_float("clip_range", 0.25, 0.3, step=0.01)
+        ent_coef = trial.suggest_float("ent_coef", 2e-5, 2e-4, log=True)
+        vf_coef = trial.suggest_float("vf_coef", 0.65, 0.75, step=0.01)
     else:
         learning_rate = UIC_LEARNING_RATE
         n_steps = UIC_N_STEPS
@@ -325,10 +325,10 @@ def objective(trial: optuna.Trial) -> float:
         vf_coef = UIC_VF_COEF
 
     if OPTIMIZE_ARCHITECTURE:
-        n_layers = trial.suggest_int("n_layers", 2, 3)
-        hidden_size = trial.suggest_categorical("hidden_size", [96, 128, 256])
+        n_layers = 2
+        hidden_size = trial.suggest_categorical("hidden_size", [128, 256])
         activation_name = trial.suggest_categorical(
-            "activation", ["ReLU", "Tanh", "LeakyReLU"]
+            "activation", ["ReLU", "LeakyReLU"]
         )
         if activation_name == "ReLU":
             activation_fn = torch.nn.ReLU
@@ -350,11 +350,11 @@ def objective(trial: optuna.Trial) -> float:
         policy_kwargs = UIC_POLICY_KWARGS
 
     if OPTIMIZE_STABILITY:
-        gamma = trial.suggest_float("gamma", 0.95, 0.990, log=True)
-        gae_lambda = trial.suggest_float("gae_lambda", 0.90, 0.97, step=0.01)
+        gamma = trial.suggest_float("gamma", 0.95, 0.98, log=True)
+        gae_lambda = trial.suggest_float("gae_lambda", 0.94, 0.97, step=0.01)
 
         raw_target_kl = trial.suggest_categorical(
-            "use_target_kl", [0.01, 0.015, 0.02]
+            "use_target_kl", [0.02]
         )
         if raw_target_kl is None:
             target_kl: float | None = None
@@ -468,6 +468,7 @@ if __name__ == "__main__":
         n_trials=N_TRIALS,
         n_jobs=2,
         callbacks=[save_trial_callback],
+        show_progress_bar=True,
     )
 
     df = study.trials_dataframe(
