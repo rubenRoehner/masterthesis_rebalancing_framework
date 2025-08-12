@@ -1,0 +1,13 @@
+configuration,configuration,manual_rebalancing,incentive_rebalancing,fleet_size,mean_satisfied_ratio_mean,mean_satisfied_ratio_std,mean_rebalanced_vehicles_manually_mean,mean_rebalanced_vehicles_manually_std,mean_rebalanced_vehicles_incentives_mean,mean_rebalanced_vehicles_incentives_std,max_satisfied_ratio_mean,max_satisfied_ratio_std,min_satisfied_ratio_mean,min_satisfied_ratio_std,mean_gini_index_mean,mean_gini_index_std
+Both_Enabled_1200,Both_Enabled_1200,True,True,1200,0.8548,0.007,0.0,0.0,27.1622,1.1475,1.0,0.0,0.3438,0.0133,0.3478,0.0052
+Both_Enabled_600,Both_Enabled_600,True,True,600,0.6849,0.0074,0.2458,0.1596,46.2816,0.7016,1.0,0.0,0.1942,0.0088,0.4346,0.0073
+Both_Enabled_900,Both_Enabled_900,True,True,900,0.7876,0.0078,0.02,0.0,35.7566,0.8994,1.0,0.0,0.2728,0.0108,0.3807,0.0057
+Incentive_Only_1200,Incentive_Only_1200,False,True,1200,0.8566,0.0053,0.0,0.0,26.6336,0.9632,1.0,0.0,0.3467,0.01,0.3451,0.0044
+Incentive_Only_600,Incentive_Only_600,False,True,600,0.6775,0.0056,0.0,0.0,46.7081,0.6138,1.0,0.0,0.192,0.0067,0.43,0.0059
+Incentive_Only_900,Incentive_Only_900,False,True,900,0.7889,0.0059,0.0,0.0,35.797,0.828,1.0,0.0,0.2734,0.0095,0.3831,0.0071
+Manual_Only_1200,Manual_Only_1200,True,False,1200,0.8603,0.0071,0.0,0.0,0.0,0.0,1.0,0.0,0.3497,0.011,0.3643,0.0073
+Manual_Only_600,Manual_Only_600,True,False,600,0.7025,0.0091,0.1776,0.0583,0.0,0.0,0.9984,0.0072,0.2028,0.0084,0.4678,0.0068
+Manual_Only_900,Manual_Only_900,True,False,900,0.8017,0.0044,0.02,0.0,0.0,0.0,1.0,0.0,0.2835,0.0063,0.4078,0.0064
+No_Rebalancing_1200,No_Rebalancing_1200,False,False,1200,0.8611,0.0072,0.0,0.0,0.0,0.0,1.0,0.0,0.3533,0.0124,0.3632,0.0084
+No_Rebalancing_600,No_Rebalancing_600,False,False,600,0.6956,0.0082,0.0,0.0,0.0,0.0,0.9975,0.0112,0.1999,0.0071,0.4701,0.008
+No_Rebalancing_900,No_Rebalancing_900,False,False,900,0.7972,0.008,0.0,0.0,0.0,0.0,1.0,0.0,0.2807,0.013,0.4059,0.0077
