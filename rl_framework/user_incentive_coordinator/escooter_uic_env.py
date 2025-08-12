@@ -133,12 +133,6 @@ class EscooterUICEnv(gym.Env):
             for cid in self.community_index_map.keys()
         }
 
-    def set_active_community(self, community_id: str):
-        """Allows the training loop to set which community is currently being trained."""
-        self.active_community_id = community_id
-        self._populate_helper_maps()
-        # This assumes all communities have the same number of zones. If not, the action/obs spaces would need reshaping.
-
     def get_observation(self) -> Dict[str, np.ndarray]:
         """Gets the observation for the currently active community using FORECASTERS."""
         self.current_time = self._calculate_current_time()
@@ -310,9 +304,8 @@ class EscooterUICEnv(gym.Env):
         )
         gini_reward = 1.0 - gini_coefficient
 
-        local_fleet_size = len(self.local_zone_global_indices) * (
-            self.fleet_size // self.n_total_zones
-        )
+        local_fleet_size = int(self.global_vehicle_counts[self.local_zone_global_indices].sum())
+
         rebalancing_ratio = (
             total_vehicles_rebalanced / local_fleet_size if local_fleet_size > 0 else 0
         )
@@ -372,23 +365,27 @@ class EscooterUICEnv(gym.Env):
             if not neighbor_local_idxs:
                 continue
 
-            incentives = [action[idx] for idx in neighbor_local_idxs]
-            if not incentives:
-                continue
+            self_incentive = action[local_idx]
+            candidate_local_idxs = [local_idx] + neighbor_local_idxs
+            candidate_incentives = action[candidate_local_idxs]
 
-            best_position = np.argmax(incentives)
-            best_local_index = neighbor_local_idxs[best_position]
-            max_incentive = incentives[best_position]
-            willingness = user_willingness_fn(max_incentive)
+            best_rel_pos = int(np.argmax(candidate_incentives))
+            best_local_index = candidate_local_idxs[best_rel_pos]
+            best_incentive = float(candidate_incentives[best_rel_pos])
 
-            if max_incentive > 0:
-                n_scooter = int(modified_dropoff_demand[local_idx] * willingness)
-                modified_dropoff_demand[local_idx] -= n_scooter
-                modified_dropoff_demand[best_local_index] += n_scooter
-                total_vehicles_rebalanced += n_scooter
+            delta = best_incentive - float(self_incentive)
+            if best_local_index != local_idx and delta > 0 and modified_dropoff_demand[local_idx] > 0:
+                p_move = float(user_willingness_fn(delta))
+                n = int(modified_dropoff_demand[local_idx])
 
-        if int(modified_dropoff_demand.sum()) != int(initial_dropoff_sum):
-            pass
+                n_rebalanced = np.random.binomial(n=n, p=np.clip(p_move, 0.0, 1.0))
+                modified_dropoff_demand[local_idx] -= n_rebalanced
+                modified_dropoff_demand[best_local_index] += n_rebalanced
+                total_vehicles_rebalanced += n_rebalanced
+
+        assert (
+            modified_dropoff_demand.sum() == initial_dropoff_sum
+        ), "Dropoff demand does not match the initial sum after incentive handling."
 
         return modified_dropoff_demand, total_vehicles_rebalanced
 
