@@ -84,7 +84,7 @@ START_TIME = datetime(2025, 2, 11, 14, 0)
 END_TIME = datetime(2025, 5, 4, 15, 0)
 EVAL_END_TIME = datetime(2025, 5, 18, 15, 0)
 
-N_WORKERS = 6
+N_WORKERS = 1
 BASE_SEED = 42
 
 # UIC parameters
@@ -466,7 +466,7 @@ if __name__ == "__main__":
     study.optimize(
         objective,
         n_trials=N_TRIALS,
-        n_jobs=2,
+        n_jobs=4,
         callbacks=[save_trial_callback],
         show_progress_bar=True,
     )

@@ -34,7 +34,7 @@ COMMUNITY_IDS = [
 GLOBAL_FLEET_SIZE = 810
 N_EPOCHS = 20
 MAX_STEPS_PER_EPISODE = 256
-TOTAL_TIME_STEPS = 100_000
+TOTAL_TIME_STEPS = 1_000_000
 START_TIME = datetime(2025, 2, 11, 14, 0)
 END_TIME = datetime(2025, 5, 18, 15, 0)
 
@@ -53,20 +53,21 @@ REWARD_WEIGHT_REBALANCING = 0.2
 REWARD_WEIGHT_GINI = 7.0
 
 # Optimized hyperparameters
-UIC_N_STEPS = 1024
-UIC_LEARNING_RATE = 3e-05
-UIC_GAMMA = 0.975
+#{'learning_rate': 2.123940994160189e-05, 'n_steps': 512, 'batch_size': 32, 'clip_range': 0.26, 'ent_coef': 0.0001550691009989107, 'vf_coef': 0.68, 'hidden_size': 256, 'activation': 'LeakyReLU', 'gamma': 0.9629645139686621, 'gae_lambda': 0.95, 'use_target_kl': 0.02}
+UIC_N_STEPS = 512
+UIC_LEARNING_RATE = 2.124e-05
+UIC_GAMMA = 0.9629645139686621
 UIC_GAE_LAMBDA = 0.95
-UIC_CLIP_RANGE = 0.08
-UIC_ENT_COEF = 0.002
-UIC_BATCH_SIZE = 64
+UIC_CLIP_RANGE = 0.26
+UIC_ENT_COEF = 0.00016
+UIC_BATCH_SIZE = 32
 UIC_VERBOSE = 0
 UIC_POLICY_KWARGS = {
-    "net_arch": dict(pi=[128, 128, 128], vf=[128, 128, 128]),
-    "activation_fn": torch.nn.ReLU,
+    "net_arch": dict(pi=[256, 256, 256], vf=[256, 256, 256]),
+    "activation_fn": torch.nn.LeakyReLU,
 }
-UIC_VF_COEF = 0.7
-UIC_TARGET_KL = 0.012
+UIC_VF_COEF = 0.68
+UIC_TARGET_KL = 0.02
 UIC_TENSORBOARD_LOG = "rl_framework/runs/UIC/"
 
 # --- Data Paths ---
@@ -145,7 +146,7 @@ def make_env(
 
 def train_uic(args):
     """Trains a single UIC agent for a specific community on a specific GPU."""
-    community_id, gpu_id, all_city_data, rdc_agent_instance = args
+    community_id, gpu_id, rdc_agent_instance = args
     device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
     torch.cuda.set_device(device)
     print(f"Starting training for community {community_id} on device {device}")
@@ -157,30 +158,30 @@ def train_uic(args):
     forecasters = {
         "pickup": IrConvLstmDemandPreForecaster(
             num_communities=len(COMMUNITY_IDS),
-            num_zones=all_city_data["n_total_zones"],
-            zone_community_map=all_city_data["zone_community_map"],
+            num_zones=N_TOTAL_ZONES,
+            zone_community_map=ZONE_COMMUNITY_MAP,
             demand_data_path=PICK_UP_DEMAND_FORECAST_DATA_PATH,
         ),
         "dropoff": IrConvLstmDemandPreForecaster(
             num_communities=len(COMMUNITY_IDS),
-            num_zones=all_city_data["n_total_zones"],
-            zone_community_map=all_city_data["zone_community_map"],
+            num_zones=N_TOTAL_ZONES,
+            zone_community_map=ZONE_COMMUNITY_MAP,
             demand_data_path=DROP_OFF_DEMAND_FORECAST_DATA_PATH,
         ),
     }
     providers = {
         "pickup": DemandProviderImpl(
             num_communities=len(COMMUNITY_IDS),
-            num_zones=all_city_data["n_total_zones"],
-            zone_community_map=all_city_data["zone_community_map"],
+            num_zones=N_TOTAL_ZONES,
+            zone_community_map=ZONE_COMMUNITY_MAP,
             demand_data_path=PICK_UP_DEMAND_DATA_PATH,
             startTime=START_TIME,
             endTime=END_TIME,
         ),
         "dropoff": DemandProviderImpl(
             num_communities=len(COMMUNITY_IDS),
-            num_zones=all_city_data["n_total_zones"],
-            zone_community_map=all_city_data["zone_community_map"],
+            num_zones=N_TOTAL_ZONES,
+            zone_community_map=ZONE_COMMUNITY_MAP,
             demand_data_path=DROP_OFF_DEMAND_DATA_PATH,
             startTime=START_TIME,
             endTime=END_TIME,
@@ -192,7 +193,6 @@ def train_uic(args):
             make_env(
                 rank=0,
                 community_id=community_id,
-                all_city_data=all_city_data,
                 forecasters=forecasters,
                 providers=providers,
                 rdc_agent_instance=rdc_agent_instance,
