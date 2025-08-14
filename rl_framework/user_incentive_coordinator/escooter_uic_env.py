@@ -205,7 +205,7 @@ class EscooterUICEnv(gym.Env):
 
         self.global_vehicle_counts[self.local_zone_global_indices] = new_local_counts
 
-        gini_coefficient = self.calculate_gini_coefficient(new_local_counts)
+        gini_coefficient = EscooterRDCEnv.calculate_gini_coefficient(new_local_counts.copy())
         reward = self.calculate_reward(
             satisfied_demand, offered_demand, vehicles_rebalanced, gini_coefficient
         )
@@ -238,7 +238,8 @@ class EscooterUICEnv(gym.Env):
         )
         remainder = self.fleet_size % self.n_total_zones
         if remainder > 0:
-            self.global_vehicle_counts[:remainder] += 1
+            idxs = self.np_random.choice(self.n_total_zones, size=remainder, replace=False)
+            self.global_vehicle_counts[idxs] += 1
 
         return self.get_observation(), {}
 
@@ -396,57 +397,39 @@ class EscooterUICEnv(gym.Env):
         dropoff_demand: np.ndarray,
         current_vehicle_counts: np.ndarray,
     ) -> tuple[np.ndarray, int, int]:
-        """Updates vehicle counts based on pickup and dropoff demand."""
-        fleet_size = current_vehicle_counts.sum()
+        """Updates vehicles counts based on pickup and dropoff demand."""
+        pickup_demand = pickup_demand.astype(int, copy=False)
+        dropoff_demand = dropoff_demand.astype(int, copy=False)
+        current_vehicle_counts = current_vehicle_counts.astype(int, copy=False)
 
-        pickup_total = pickup_demand.sum()
-        dropoff_total = dropoff_demand.sum()
+        fleet_size = int(current_vehicle_counts.sum())
 
-        if pickup_total != dropoff_total:
-            diff = int(abs(pickup_total - dropoff_total))
-
-            if pickup_total < dropoff_total:
-                indices = np.random.choice(n_zones, size=diff, replace=True)
-                pickup_demand = pickup_demand.copy()
-                for idx in indices:
-                    pickup_demand[idx] += 1
-            else:
-                indices = np.random.choice(n_zones, size=diff, replace=True)
-                dropoff_demand = dropoff_demand.copy()
-                for idx in indices:
-                    dropoff_demand[idx] += 1
-
-        satisfied_pickups = np.minimum(pickup_demand, current_vehicle_counts).astype(
-            int
-        )
-        total_satisfied_demand = int(satisfied_pickups.sum())
+        satisfied_pickups = np.minimum(pickup_demand, current_vehicle_counts)
+        total_satisfied_pickups = int(satisfied_pickups.sum())
 
         new_vehicle_counts = current_vehicle_counts - satisfied_pickups
 
-        total_satisfied_pickups = total_satisfied_demand
         if total_satisfied_pickups > 0:
-            dropoff_sum = dropoff_demand.sum()
-            if dropoff_sum > 0:
-                dropoff_proportions = dropoff_demand / dropoff_sum
-                satisfied_dropoffs = (
-                    dropoff_proportions * total_satisfied_pickups
-                ).astype(int)
+            drop_sum = float(dropoff_demand.sum())
 
-            remainder = total_satisfied_pickups - satisfied_dropoffs.sum()
-            if remainder > 0:
-                fractional_parts = (
-                    dropoff_proportions * total_satisfied_pickups
-                ) - satisfied_dropoffs
-                top_zones = np.argsort(fractional_parts)[-remainder:]
-                satisfied_dropoffs[top_zones] += 1
+            if drop_sum > 0.0:
+                target = (dropoff_demand / drop_sum) * total_satisfied_pickups  # float
+                satisfied_dropoffs = np.floor(target).astype(int)
+                remainder = total_satisfied_pickups - int(satisfied_dropoffs.sum())
+                if remainder > 0:
+                    residual = target - satisfied_dropoffs
+                    top_idx = np.argsort(residual)[-remainder:]
+                    satisfied_dropoffs[top_idx] += 1
+            else:
+                satisfied_dropoffs = satisfied_pickups.copy()
 
             new_vehicle_counts += satisfied_dropoffs
 
-        assert (
-            new_vehicle_counts.sum() == fleet_size
-        ), "Vehicle counts do not match the total fleet size after update."
+        assert int(new_vehicle_counts.sum()) == fleet_size, \
+            "Vehicle counts do not match total fleet size after update."
 
-        total_offered_demand = max(pickup_demand.sum(), dropoff_demand.sum())
+        total_satisfied_demand = total_satisfied_pickups
+        total_offered_demand = int(pickup_demand.sum())
 
         return new_vehicle_counts, total_satisfied_demand, total_offered_demand
 
