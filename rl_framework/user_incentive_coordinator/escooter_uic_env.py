@@ -379,7 +379,7 @@ class EscooterUICEnv(gym.Env):
                 p_move = float(user_willingness_fn(delta))
                 n = int(modified_dropoff_demand[local_idx])
 
-                n_rebalanced = np.random.binomial(n=n, p=np.clip(p_move, 0.0, 1.0))
+                n_rebalanced = int(n * p_move)
                 modified_dropoff_demand[local_idx] -= n_rebalanced
                 modified_dropoff_demand[best_local_index] += n_rebalanced
                 total_vehicles_rebalanced += n_rebalanced
