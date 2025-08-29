@@ -75,7 +75,6 @@ EVAL_END_TIME = datetime(2025, 5, 18, 15, 0)
 output_dir = "ho_results"
 os.makedirs(output_dir, exist_ok=True)
 
-# [grid_id, community_id]
 ZONE_COMMUNITY_MAP: pd.DataFrame = pd.read_pickle(
     "/home/ruroit00/rebalancing_framework/processed_data/grid_community_map.pickle"
 )
@@ -245,7 +244,9 @@ def objective(trial: optuna.Trial) -> float:
 
     RDC_EPSILON_START = 1.0
     if OPTIMIZE_EXPLORATION:
-        RDC_EPSILON_END = trial.suggest_float("rdc_epsilon_end", 0.06, 0.075, step=0.001)
+        RDC_EPSILON_END = trial.suggest_float(
+            "rdc_epsilon_end", 0.06, 0.075, step=0.001
+        )
         RDC_EPSILON_DECAY = trial.suggest_float(
             "rdc_epsilon_decay", 0.96, 0.975, log=True
         )
@@ -253,7 +254,7 @@ def objective(trial: optuna.Trial) -> float:
         RDC_EPSILON_END = 0.06
         RDC_EPSILON_DECAY = 0.961
 
-    RDC_STEP_DURATION = 60  # in minutes
+    RDC_STEP_DURATION = 60
 
     train_envs = EscooterRDCEnv(
         num_communities=N_COMMUNITIES,

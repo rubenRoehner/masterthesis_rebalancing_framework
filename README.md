@@ -67,12 +67,4 @@ All core algorithms, system architecture, research ideas, implementation logic, 
 - Adding inline code comments
 - Improving code documentation formatting
 
-No AI was used for:
-- Algorithm design or implementation
-- Research methodology or approach
-- System architecture decisions
-- Technical problem-solving
-- Core functionality development
-- Scientific insights or innovations
-
 The research contributions, technical innovations, and all substantive code development remain entirely the work of the human author.

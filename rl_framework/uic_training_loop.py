@@ -1,3 +1,15 @@
+"""
+uic_training_loop.py
+
+This script orchestrates the parallel training of User Incentive Coordinator (UIC) agents
+for multiple communities. It sets up the training environment, loads necessary data and
+forecasters, and manages the distribution of training tasks across available GPUs.
+
+The script can optionally load a pre-trained Regional Distribution Coordinator (RDC) agent
+to simulate its influence on the global vehicle state during UIC training, providing a more
+realistic and stable training environment.
+"""
+
 from datetime import datetime, timedelta
 import torch
 import pandas as pd
@@ -53,7 +65,6 @@ REWARD_WEIGHT_REBALANCING = 0.2
 REWARD_WEIGHT_GINI = 7.0
 
 # Optimized hyperparameters
-#{'learning_rate': 2.123940994160189e-05, 'n_steps': 512, 'batch_size': 32, 'clip_range': 0.26, 'ent_coef': 0.0001550691009989107, 'vf_coef': 0.68, 'hidden_size': 256, 'activation': 'LeakyReLU', 'gamma': 0.9629645139686621, 'gae_lambda': 0.95, 'use_target_kl': 0.02}
 UIC_N_STEPS = 512
 UIC_LEARNING_RATE = 2.124e-05
 UIC_GAMMA = 0.9629645139686621
@@ -75,7 +86,6 @@ DROP_OFF_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data
 PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/voi_pickup_demand_h3_hourly.pickle"
 DROP_OFF_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_dropoff_forecasts.pkl"
 PICK_UP_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_pickup_forecasts.pkl"
-ZONE_COMMUNITY_MAP_PATH = (
 ZONE_COMMUNITY_MAP: pd.DataFrame = pd.read_pickle(
     "/home/ruroit00/rebalancing_framework/processed_data/grid_community_map.pickle"
 )
@@ -99,8 +109,20 @@ COMMUNITY_INDEX_MAP: dict[str, int] = {}
 for index, value in enumerate(sorted(ZONE_COMMUNITY_MAP["community_index"].unique())):
     COMMUNITY_INDEX_MAP.update({value: index})
 
+
 def USER_WILLINGNESS_FN(incentive: float) -> float:
-    """User willingness function mapping incentive level to compliance probability."""
+    """
+    User willingness function mapping incentive level to compliance probability.
+
+    Args:
+        incentive: The incentive value offered to the user.
+
+    Returns:
+        float: The probability of user compliance.
+
+    Raises:
+        None
+    """
     return 0.4 * incentive
 
 
@@ -113,9 +135,42 @@ def make_env(
     device: torch.device,
     seed: int = 0,
 ):
-    """Factory for creating the unified training environment."""
+    """
+    Factory for creating the unified training environment.
+
+    This function returns a callable that, when called, creates and initializes
+    an instance of the EscooterUICEnv, wraps it with a Monitor, and sets a unique
+    seed for reproducibility.
+
+    Args:
+        rank: The rank of the process, used for seeding.
+        community_id: The ID of the community for this environment instance.
+        forecasters: A dictionary of demand forecasters.
+        providers: A dictionary of demand providers.
+        rdc_agent_instance: An instance of the RDC agent.
+        device: The PyTorch device to use.
+        seed: The base seed for the environment.
+
+    Returns:
+        A callable function that creates and returns a configured gym environment.
+
+    Raises:
+        None
+    """
 
     def _init():
+        """
+        Initializes and returns a monitored gym environment.
+
+        Args:
+            None
+
+        Returns:
+            gym.Env: The initialized and monitored environment.
+
+        Raises:
+            None
+        """
         env = EscooterUICEnv(
             community_id=community_id,
             fleet_size=GLOBAL_FLEET_SIZE,
@@ -145,7 +200,22 @@ def make_env(
 
 
 def train_uic(args):
-    """Trains a single UIC agent for a specific community on a specific GPU."""
+    """
+    Trains a single UIC agent for a specific community on a specific GPU.
+
+    This function sets up the environment, initializes the agent, and runs the
+    training loop. After training, it saves the trained model and the
+    VecNormalize statistics.
+
+    Args:
+        args: A tuple containing (community_id, gpu_id, rdc_agent_instance).
+
+    Returns:
+        str: The community_id of the agent that was trained.
+
+    Raises:
+        None
+    """
     community_id, gpu_id, rdc_agent_instance = args
     device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
     torch.cuda.set_device(device)
@@ -154,7 +224,6 @@ def train_uic(args):
     if rdc_agent_instance:
         rdc_agent_instance.to(device)
 
-    # Initialize forecasters and providers once per process
     forecasters = {
         "pickup": IrConvLstmDemandPreForecaster(
             num_communities=len(COMMUNITY_IDS),
@@ -239,12 +308,27 @@ def train_uic(args):
 
 
 def train_all_uics_parallel() -> None:
-    """Main parallel training function."""
+    """
+    Main parallel training function.
+
+    This function loads a pre-trained RDC agent (if specified), prepares the
+    training tasks for each community, and distributes them across multiple GPUs
+    using a multiprocessing pool.
+
+    Args:
+        None
+
+    Returns:
+        None
+
+    Raises:
+        RuntimeError: If the multiprocessing start method cannot be set to 'spawn'.
+                      The function catches this and proceeds with the default method.
+    """
 
     rdc_agent_instance = None
     if RDC_AGENT_PATH:
         print(f"Loading RDC agent from {RDC_AGENT_PATH}...")
-        # A dummy device is used for loading, it will be moved to the correct GPU in each process
         dummy_device = torch.device("cpu")
         rdc_agent_instance = RegionalDistributionCoordinator(
             device=dummy_device,

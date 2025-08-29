@@ -234,7 +234,7 @@ class EscooterRDCEnv(gym.Env):
         """Calculate the Gini coefficient of vehicle distribution across zones.
 
         Args:
-            None
+            vehicle_counts: An array of vehicle counts.
 
         Returns:
             float: Gini coefficient (0 = perfect equality, 1 = maximum inequality)
@@ -268,6 +268,9 @@ class EscooterRDCEnv(gym.Env):
         This method removes vehicles from zones that are proportionally above the
         community average and adds them to zones that are proportionally below it,
         leading to a smoother and more balanced vehicle distribution.
+
+        Raises:
+            AssertionError: If vehicle counts do not match total fleet size after rebalancing.
         """
         fleet_size = current_vehicle_counts.sum()
         temp_vehicle_counts = current_vehicle_counts.copy()
@@ -402,7 +405,6 @@ class EscooterRDCEnv(gym.Env):
                 total_deficit = sum(deficit_vehicles.values())
 
                 if total_deficit > 0 and vehicles_to_give_to_comm > 0:
-                    # Track actual vehicles distributed
                     zone_additions = []
 
                     for zone_idx, deficit in deficit_vehicles.items():
@@ -451,7 +453,7 @@ class EscooterRDCEnv(gym.Env):
             float: ratio of satisfied pickup demand
 
         Raises:
-            None
+            AssertionError: If vehicle counts do not match total fleet size after demand simulation.
         """
         fleet_size = self.current_vehicle_counts.sum()
 
@@ -527,7 +529,8 @@ class EscooterRDCEnv(gym.Env):
             tuple: (observation, reward, terminated, truncated, info)
 
         Raises:
-            AssertionError: if negative vehicle counts are detected
+            AssertionError: if rebalanced vehicle count is negative, vehicle counts do not match
+                            fleet size, or negative scooter counts are detected.
         """
         actual_action_allocations = [self.action_values[a] for a in action]
 

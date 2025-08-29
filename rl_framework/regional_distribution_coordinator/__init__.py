@@ -1,3 +1,0 @@
-"""
-Regional distribution coordinator module.
-"""

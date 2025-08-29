@@ -32,7 +32,7 @@ END_TIME = datetime(2025, 5, 18, 15, 0)
 
 ZONE_COMMUNITY_MAP: pd.DataFrame = pd.read_pickle(
     "/home/ruroit00/rebalancing_framework/processed_data/grid_community_map.pickle"
-)  # [grid_id, community_id]
+)
 
 N_COMMUNITIES = ZONE_COMMUNITY_MAP["community_index"].nunique()
 N_ZONES = ZONE_COMMUNITY_MAP.shape[0]
@@ -47,9 +47,7 @@ for i, row in ZONE_COMMUNITY_MAP.iterrows():
     ZONE_INDEX_MAP.update({row["grid_index"]: i})
 
 RDC_ACTION_VALUES = [-8, -4, -2, 0, 2, 4, 8]
-RDC_FEATURES_PER_COMMUNITY = (
-    3 
-)
+RDC_FEATURES_PER_COMMUNITY = 3
 
 RDC_REPLAY_BUFFER_CAPACITY = 13_000
 RDC_REPLAY_BUFFER_ALPHA = 1.0
@@ -81,9 +79,6 @@ PICK_UP_DEMAND_DATA_PATH = "/home/ruroit00/rebalancing_framework/processed_data/
 
 DROP_OFF_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_dropoff_forecasts.pkl"
 PICK_UP_DEMAND_FORECAST_DATA_PATH = "/home/ruroit00/rebalancing_framework/rl_framework/demand_forecasting/data/IrConv_LSTM_pickup_forecasts.pkl"
-# REBALANCER_AGENT parameters
-# forecast for pickup, forecast for dropoff, and current vehicle counts
-# REBALANCER_AGENT_FEATURES_PER_ZONE = 3
 
 # --- INITIALIZE ENVIRONMENT ---
 dropoff_demand_forecaster = IrConvLstmDemandPreForecaster(
@@ -264,7 +259,6 @@ def main() -> None:
             )
 
         writer.add_scalar("Epsilon/Episode", rdc_agent.epsilon, episode)
-
 
         writer.add_scalar(
             "VehiclesReBalanced/Episode", episode_vehicles_rebalanced, episode

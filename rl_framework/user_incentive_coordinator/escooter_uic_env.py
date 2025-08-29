@@ -1,4 +1,13 @@
 # rl_framework/user_incentive_coordinator/escooter_uic_env.py
+"""
+escooter_uic_env.py
+
+E-scooter User Incentive Coordinator Environment.
+This gymnasium environment simulates the entire service area to train a single
+User Incentive Coordinator (UIC) agent for its assigned community. It accounts for
+the global vehicle state and can optionally include a pre-trained Regional
+Distribution Coordinator (RDC) agent to simulate its impact on fleet distribution.
+"""
 
 import gymnasium as gym
 from gymnasium import spaces
@@ -52,6 +61,33 @@ class EscooterUICEnv(gym.Env):
     ) -> None:
         """
         Initializes the UIC environment that simulates the entire service area.
+
+        Args:
+            community_id: ID of the community the UIC agent is responsible for.
+            fleet_size: Total number of vehicles in the fleet.
+            zone_community_map: DataFrame mapping zones to communities.
+            community_index_map: Mapping from community IDs to indices.
+            zone_index_map: Mapping from zone IDs to indices.
+            zone_neighbor_map: Mapping of zones to their neighbors.
+            user_willingness_fn: Function to model user willingness to move.
+            pickup_demand_forecaster: Forecaster for pickup demand.
+            dropoff_demand_forecaster: Forecaster for dropoff demand.
+            pickup_demand_provider: Provider for actual pickup demand.
+            dropoff_demand_provider: Provider for actual dropoff demand.
+            max_steps: Maximum number of steps per episode.
+            start_time: Simulation start time.
+            step_duration: Duration of each simulation step.
+            reward_weight_demand: Weight for demand satisfaction in reward.
+            reward_weight_rebalancing: Weight for rebalancing in reward.
+            reward_weight_gini: Weight for distribution equality in reward.
+            device: PyTorch device for tensor operations.
+            rdc_agent: Optional pre-trained RDC agent.
+
+        Returns:
+            None
+
+        Raises:
+            None: This method does not raise any exceptions.
         """
         super().__init__()
         self.active_community_id = community_id
@@ -111,7 +147,18 @@ class EscooterUICEnv(gym.Env):
         self.start_offset = 0
 
     def _populate_helper_maps(self):
-        """Populates helper maps for the active community and for the global RDC simulation."""
+        """
+        Populates helper maps for the active community and for the global RDC simulation.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None: This method does not raise any exceptions.
+        """
         community_zones_df = self.zone_community_map[
             self.zone_community_map["community_index"] == self.active_community_id
         ]
@@ -134,7 +181,19 @@ class EscooterUICEnv(gym.Env):
         }
 
     def get_observation(self) -> Dict[str, np.ndarray]:
-        """Gets the observation for the currently active community using FORECASTERS."""
+        """
+        Gets the observation for the currently active community using FORECASTERS.
+
+        Args:
+            None
+
+        Returns:
+            Dict[str, np.ndarray]: The observation for the agent, containing pickup demand,
+                                   dropoff demand, and current vehicle counts for the local community.
+
+        Raises:
+            None: This method does not raise any exceptions.
+        """
         self.current_time = self._calculate_current_time()
         pickup_forecast_full = self.pickup_demand_forecaster.predict_demand_per_zone(
             self.current_time.hour, self.current_time.day, self.current_time.month
@@ -156,7 +215,19 @@ class EscooterUICEnv(gym.Env):
         }
 
     def step(self, action: np.ndarray) -> tuple[dict, float, bool, bool, dict]:
-        """Executes one full time step, including RDC action."""
+        """
+        Executes one full time step, including RDC action.
+
+        Args:
+            action: The incentive action from the UIC agent for its community.
+
+        Returns:
+            tuple: A tuple containing the next observation, reward, terminated flag,
+                   truncated flag, and an info dictionary.
+
+        Raises:
+            AssertionError: If global vehicle counts do not match fleet size after demand simulation.
+        """
         if self.rdc_agent:
             self._simulate_rdc_step()
 
@@ -205,7 +276,9 @@ class EscooterUICEnv(gym.Env):
 
         self.global_vehicle_counts[self.local_zone_global_indices] = new_local_counts
 
-        gini_coefficient = EscooterRDCEnv.calculate_gini_coefficient(new_local_counts.copy())
+        gini_coefficient = EscooterRDCEnv.calculate_gini_coefficient(
+            new_local_counts.copy()
+        )
         reward = self.calculate_reward(
             satisfied_demand, offered_demand, vehicles_rebalanced, gini_coefficient
         )
@@ -227,7 +300,19 @@ class EscooterUICEnv(gym.Env):
         )
 
     def reset(self, *, seed=None, options=None) -> tuple[dict, dict]:
-        """Resets the entire simulation state for a new episode."""
+        """
+        Resets the entire simulation state for a new episode.
+
+        Args:
+            seed: The random seed to use for the new episode.
+            options: Additional options for resetting the environment.
+
+        Returns:
+            tuple: A tuple containing the initial observation and an info dictionary.
+
+        Raises:
+            None: This method does not raise any exceptions.
+        """
         super().reset(seed=seed)
         self.current_step = 0
         self.start_offset = self.np_random.integers(0, self.demand_trace_length)
@@ -238,13 +323,26 @@ class EscooterUICEnv(gym.Env):
         )
         remainder = self.fleet_size % self.n_total_zones
         if remainder > 0:
-            idxs = self.np_random.choice(self.n_total_zones, size=remainder, replace=False)
+            idxs = self.np_random.choice(
+                self.n_total_zones, size=remainder, replace=False
+            )
             self.global_vehicle_counts[idxs] += 1
 
         return self.get_observation(), {}
 
     def _simulate_rdc_step(self):
-        """Prepares RDC observation and updates global vehicle counts using the static method."""
+        """
+        Prepares RDC observation and updates global vehicle counts using the static method.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None: This method does not raise any exceptions.
+        """
         obs_rdc = self._get_rdc_observation()
         with torch.no_grad():
             rdc_action_indices = self.rdc_agent.select_action(obs_rdc)
@@ -261,7 +359,18 @@ class EscooterUICEnv(gym.Env):
         )
 
     def _get_rdc_observation(self) -> torch.Tensor:
-        """Constructs the RDC observation using FORECASTERS and the current global state."""
+        """
+        Constructs the RDC observation using FORECASTERS and the current global state.
+
+        Args:
+            None
+
+        Returns:
+            torch.Tensor: The observation tensor for the RDC agent.
+
+        Raises:
+            None: This method does not raise any exceptions.
+        """
         vehicle_counts_per_community = np.zeros(self.n_communities, dtype=int)
         for cid, cidx in self.community_index_map.items():
             vehicle_counts_per_community[cidx] = self.global_vehicle_counts[
@@ -288,7 +397,18 @@ class EscooterUICEnv(gym.Env):
         return torch.tensor(observation, dtype=torch.float32, device=self.device)
 
     def _calculate_current_time(self) -> datetime:
-        """Calculates the current simulation time based on step count and random offset."""
+        """
+        Calculates the current simulation time based on step count and random offset.
+
+        Args:
+            None
+
+        Returns:
+            datetime: The current simulation time.
+
+        Raises:
+            None: This method does not raise any exceptions.
+        """
         idx = (self.start_offset + self.current_step) % self.demand_trace_length
         return self.full_time_index_available[idx]
 
@@ -299,13 +419,29 @@ class EscooterUICEnv(gym.Env):
         total_vehicles_rebalanced: int,
         gini_coefficient: float,
     ) -> float:
-        """Calculates the multi-objective reward for the current step."""
+        """
+        Calculates the multi-objective reward for the current step.
+
+        Args:
+            total_satisfied_demand: The total number of satisfied pickup demands.
+            offered_demand: The total number of offered pickup demands.
+            total_vehicles_rebalanced: The number of vehicles rebalanced by incentives.
+            gini_coefficient: The Gini coefficient of the vehicle distribution in the community.
+
+        Returns:
+            float: The calculated reward value.
+
+        Raises:
+            None: This method does not raise any exceptions.
+        """
         norm_satisified_demand = (
             total_satisfied_demand / offered_demand if offered_demand > 0 else 1.0
         )
         gini_reward = 1.0 - gini_coefficient
 
-        local_fleet_size = int(self.global_vehicle_counts[self.local_zone_global_indices].sum())
+        local_fleet_size = int(
+            self.global_vehicle_counts[self.local_zone_global_indices].sum()
+        )
 
         rebalancing_ratio = (
             total_vehicles_rebalanced / local_fleet_size if local_fleet_size > 0 else 0
@@ -330,7 +466,18 @@ class EscooterUICEnv(gym.Env):
 
     @staticmethod
     def calculate_gini_coefficient(vehicle_counts: np.ndarray) -> float:
-        """Calculates the Gini coefficient for a given array of vehicle counts."""
+        """
+        Calculates the Gini coefficient for a given array of vehicle counts.
+
+        Args:
+            vehicle_counts: An array of vehicle counts per zone.
+
+        Returns:
+            float: The Gini coefficient, a value between 0 and 1.
+
+        Raises:
+            None: This method does not raise any exceptions.
+        """
         array = np.array(vehicle_counts, dtype=float)
         if np.amin(array) < 0:
             array -= np.amin(array)
@@ -352,7 +499,24 @@ class EscooterUICEnv(gym.Env):
         zone_neighbor_map: dict[str, List[str]],
         user_willingness_fn: Callable[[float], float],
     ) -> tuple[np.ndarray, int]:
-        """Handles user incentives to influence dropoff behavior."""
+        """
+        Handles user incentives to influence dropoff behavior.
+
+        Args:
+            action: The incentive values for each zone in the community.
+            dropoff_demand: The original dropoff demand for each zone.
+            zone_ids: A list of zone IDs in the community.
+            zone_id_to_local: A mapping from global zone ID to local index.
+            zone_neighbor_map: A mapping of zones to their neighbors.
+            user_willingness_fn: A function modeling user willingness to change dropoff location.
+
+        Returns:
+            tuple: A tuple containing the modified dropoff demand and the total number of
+                   vehicles rebalanced.
+
+        Raises:
+            AssertionError: If dropoff demand sum changes after incentive handling.
+        """
         total_vehicles_rebalanced = 0
         modified_dropoff_demand = dropoff_demand.copy()
         initial_dropoff_sum = modified_dropoff_demand.sum()
@@ -375,7 +539,11 @@ class EscooterUICEnv(gym.Env):
             best_incentive = float(candidate_incentives[best_rel_pos])
 
             delta = best_incentive - float(self_incentive)
-            if best_local_index != local_idx and delta > 0 and modified_dropoff_demand[local_idx] > 0:
+            if (
+                best_local_index != local_idx
+                and delta > 0
+                and modified_dropoff_demand[local_idx] > 0
+            ):
                 p_move = float(user_willingness_fn(delta))
                 n = int(modified_dropoff_demand[local_idx])
 
@@ -397,7 +565,22 @@ class EscooterUICEnv(gym.Env):
         dropoff_demand: np.ndarray,
         current_vehicle_counts: np.ndarray,
     ) -> tuple[np.ndarray, int, int]:
-        """Updates vehicles counts based on pickup and dropoff demand."""
+        """
+        Updates vehicles counts based on pickup and dropoff demand.
+
+        Args:
+            n_zones: The number of zones.
+            pickup_demand: The pickup demand for each zone.
+            dropoff_demand: The dropoff demand for each zone.
+            current_vehicle_counts: The current vehicle counts for each zone.
+
+        Returns:
+            tuple: A tuple containing the new vehicle counts, total satisfied demand,
+                   and total offered demand.
+
+        Raises:
+            AssertionError: If vehicle counts do not match total fleet size after update.
+        """
         pickup_demand = pickup_demand.astype(int, copy=False)
         dropoff_demand = dropoff_demand.astype(int, copy=False)
         current_vehicle_counts = current_vehicle_counts.astype(int, copy=False)
@@ -425,8 +608,9 @@ class EscooterUICEnv(gym.Env):
 
             new_vehicle_counts += satisfied_dropoffs
 
-        assert int(new_vehicle_counts.sum()) == fleet_size, \
-            "Vehicle counts do not match total fleet size after update."
+        assert (
+            int(new_vehicle_counts.sum()) == fleet_size
+        ), "Vehicle counts do not match total fleet size after update."
 
         total_satisfied_demand = total_satisfied_pickups
         total_offered_demand = int(pickup_demand.sum())
@@ -434,12 +618,34 @@ class EscooterUICEnv(gym.Env):
         return new_vehicle_counts, total_satisfied_demand, total_offered_demand
 
     def render(self):
-        """Renders the current environment state."""
+        """
+        Renders the current environment state.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None: This method does not raise any exceptions.
+        """
         print(
             f"Step: {self.current_step}, Time: {self.current_time}, Community: {self.active_community_id}"
         )
         print(f"Global Vehicle Count: {self.global_vehicle_counts.sum()}")
 
     def close(self):
-        """Closes the environment."""
+        """
+        Closes the environment.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None: This method does not raise any exceptions.
+        """
         pass

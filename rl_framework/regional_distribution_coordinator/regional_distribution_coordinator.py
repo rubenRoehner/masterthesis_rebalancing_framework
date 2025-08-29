@@ -288,29 +288,29 @@ class RegionalDistributionCoordinator:
         state_batch = torch.stack([exp.state for exp in experiences]).to(self.device)
         action_indice_batch = torch.tensor(
             [exp.action_indices for exp in experiences], device=self.device
-        )  # [batch_size, num_communities]
+        )
         reward_batch = torch.tensor(
             [exp.reward for exp in experiences], dtype=torch.float32, device=self.device
-        )  # [batch_size]
+        )
 
         next_state_batch = torch.stack([exp.next_state for exp in experiences]).to(
             self.device
         )
         done_batch = torch.tensor(
             [exp.done for exp in experiences], dtype=torch.float32, device=self.device
-        )  # [batch_size]
+        )
 
         q_values_list = self.policy_network(state_batch)
         current_q_values_selected_list = [
             q_values_list[i].gather(1, action_indice_batch[:, i].unsqueeze(1))
             for i in range(self.num_communities)
-        ]  # List of [batch_size, 1] tensors
+        ]
 
         with torch.no_grad():
             policy_next_q_values_list = self.policy_network(next_state_batch)
             policy_best_next_actions = [
                 q.argmax(dim=1) for q in policy_next_q_values_list
-            ]  # [batch_size]
+            ]
 
             target_next_q_values_list = self.target_network(next_state_batch)
 
@@ -321,14 +321,12 @@ class RegionalDistributionCoordinator:
                 for i in range(self.num_communities)
             ]
 
-            stacked_next_max_q_values = torch.stack(
-                evaluated_next_q_values_list, dim=1
-            )  # [batch_size, num_communities]
+            stacked_next_max_q_values = torch.stack(evaluated_next_q_values_list, dim=1)
 
             target_q_values = (
                 reward_batch.unsqueeze(1)
                 + (1 - done_batch.unsqueeze(1)) * self.gamma * stacked_next_max_q_values
-            )  # [batch_size, num_communities]
+            )
 
         td_per_head = torch.stack(
             [
@@ -339,11 +337,9 @@ class RegionalDistributionCoordinator:
                 for i in range(self.num_communities)
             ],
             dim=1,
-        )  # [batch_size, num_communities]
+        )
 
-        td_for_priorities = (
-            td_per_head.mean(dim=1).detach().cpu().numpy()
-        )  # [batch_size]
+        td_for_priorities = td_per_head.mean(dim=1).detach().cpu().numpy()
 
         self.replay_buffer.update_priorities(indices, td_for_priorities)
 
@@ -357,14 +353,14 @@ class RegionalDistributionCoordinator:
                 for i in range(self.num_communities)
             ],
             dim=1,
-        )  # [batch_size, num_communities]
+        )
 
-        per_sample_losses = per_head_losses.mean(dim=1)  # [batch_size]
+        per_sample_losses = per_head_losses.mean(dim=1)
 
         weights = torch.as_tensor(
             weights, dtype=per_head_losses.dtype, device=self.device
-        )  # [batch_size]
-        weights = weights / weights.max()  # [batch_size]
+        )
+        weights = weights / weights.max()
 
         loss = (per_sample_losses * weights).mean()
 

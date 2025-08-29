@@ -276,7 +276,6 @@ class HRLFrameworkEvaluator:
             total=self.max_steps, desc="Evaluating HRL Framework", unit="step"
         ) as pbar:
             while self.current_step < self.max_steps:
-                # --- RDC operator based rebalancing ---
                 obs_rdc = self.get_rdc_state_observation()
 
                 with torch.no_grad():
@@ -371,7 +370,6 @@ class HRLFrameworkEvaluator:
                         )
                     )
 
-                    # Update global vehicle counts
                     self.global_vehicle_counts[global_zone_indices] = (
                         local_vehicle_counts
                     )
@@ -408,7 +406,6 @@ class HRLFrameworkEvaluator:
                     )
                 )
 
-                # Update progress bar with current metrics
                 pbar.set_postfix(
                     {
                         "satisfied_ratio": f"{satisfied_ratio_global:.3f}",
